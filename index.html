@@ -305,7 +305,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <div class="nav-item" data-page="accounts" data-min-role="S" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-shield"></i>權限管理</div>
     <div class="nav-item" data-page="report" data-min-role="S" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-file-analytics"></i>匯出報表</div>
     <div class="nav-item" data-page="log" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-clipboard-list"></i>操作記錄</div>
-    <div class="nav-item" data-page="sound" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-volume"></i>音效設定</div>
+    <div class="nav-item" data-page="sound" data-min-role="S" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-volume"></i>音效設定</div>
   </div>
   <div class="logout-btn" onclick="doLogout()"><i class="ti ti-logout" style="font-size:15px"></i>登出</div>
 </nav>
@@ -442,6 +442,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <!-- 音效設定 -->
 <div class="page" id="page-sound">
   <div class="topbar"><div class="topbar-title">音效設定</div><button class="btn btn-primary" onclick="saveAllSound()"><i class="ti ti-device-floppy"></i>儲存設定</button></div>
+  <div class="notify-bar" style="background:#e6f1fb;border-color:#a8d4f5;color:#0c447c"><i class="ti ti-info-circle"></i>此設定為全系統共用，儲存後所有帳號（S/A/B級）將即時套用相同音效與音量。</div>
   <div id="sound-cards"></div>
 </div>
 
@@ -1231,10 +1232,13 @@ async function saveAllSound(){
     danger:{id:SC.danger.current.id,type:SC.danger.current.type,name:SC.danger.current.name,vol:SC.danger.vol},
     success:{id:SC.success.current.id,type:SC.success.current.type,name:SC.success.current.name,vol:SC.success.vol},
     notify:{id:SC.notify.current.id,type:SC.notify.current.type,name:SC.notify.current.name,vol:SC.notify.vol},
+    by:CU.username+'·'+CU.name,
+    at:new Date(),
   };
   try{
-    await setDoc(doc(db,'soundSettings',CU.username),data);
-    showToast('音效設定已儲存');
+    await setDoc(doc(db,'soundSettings','global'),data);
+    addLog('edit','更新全域音效設定');
+    showToast('音效設定已儲存，全系統同步生效');
   }catch(e){showToast('儲存失敗：'+e.message);}
 }
 
@@ -1242,7 +1246,8 @@ let soundUnsubscribe=null;
 function loadSoundSettings(){
   if(!CU)return;
   if(soundUnsubscribe)soundUnsubscribe();
-  soundUnsubscribe=onSnapshot(doc(db,'soundSettings',CU.username),snap=>{
+  /* 全域單一設定，S級編輯，所有帳號即時同步套用 */
+  soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
     if(snap.exists()){
       const d=snap.data();
       ['warn','danger','success','notify'].forEach(k=>{
