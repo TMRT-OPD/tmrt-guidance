@@ -1308,6 +1308,7 @@ function startEventsListener(){
     incoming.forEach(ev=>{
       if((ev.arrivalTime||ev.departTime)&&(now-(ev.arrivalTime||ev.departTime))>600000&&!autoCloseF.has(ev.id)){
         autoCloseF.add(ev.id);
+        removeAlertForEvent(ev.id);
         const d=ev.departTime;
         const mm=(d.getMonth()+1).toString().padStart(2,'0');
         const dd=d.getDate().toString().padStart(2,'0');
@@ -1340,15 +1341,30 @@ const wF=new Set(),dF=new Set(),doF=new Set(),autoCloseF=new Set();
 let bepInt=null,alertOpen=false;
 /* ── 彈窗排隊機制 ── */
 const alertQueue=[];
-function queueAlert(type,icon,title,info,extra,btns,soundKey){
-  alertQueue.push({type,icon,title,info,extra,btns,soundKey});
+let currentAlertEventId=null;
+function queueAlert(type,icon,title,info,extra,btns,soundKey,eventId){
+  alertQueue.push({type,icon,title,info,extra,btns,soundKey,eventId});
   if(!alertOpen)flushAlertQueue();
 }
 function flushAlertQueue(){
-  if(!alertQueue.length){alertOpen=false;stopLoop();return;}
+  if(!alertQueue.length){alertOpen=false;currentAlertEventId=null;stopLoop();return;}
   const next=alertQueue.shift();
+  currentAlertEventId=next.eventId||null;
   startLoop(next.soundKey);
   showAlert(next.type,next.icon,next.title,next.info,next.extra,next.btns);
+}
+/* 當某事件被自動結案時，移除其在隊列中的彈窗；若正在顯示則強制關閉並推進隊列 */
+function removeAlertForEvent(eventId){
+  for(let i=alertQueue.length-1;i>=0;i--){
+    if(alertQueue[i].eventId===eventId)alertQueue.splice(i,1);
+  }
+  if(currentAlertEventId===eventId){
+    document.getElementById('alert-bg').classList.remove('open');
+    stopLoop();
+    alertOpen=false;
+    currentAlertEventId=null;
+    setTimeout(flushAlertQueue,300);
+  }
 }
 /* 語音合成播放（danger 情境使用）*/
 let ttsInt=null,ttsLooping=false;
@@ -1467,7 +1483,7 @@ function renderEvents(){
 function delEvent(id){if(confirm('確定刪除？')){deleteEventFromDb(id);addLog('delete','刪除事件 '+id);}}
 function aInfo(ev){return'<div class="alert-info"><div class="alert-info-row"><span class="alert-info-label">路線</span><span class="alert-info-val">'+ev.from+' '+SN[ev.from]+' → '+ev.to+' '+SN[ev.to]+'</span></div><div class="alert-info-row"><span class="alert-info-label">方向</span><span class="alert-info-val">'+(ev.dir==='down'?'↓ 下行（往高鐵）':'↑ 上行（往北屯）')+'</span></div><div class="alert-info-row"><span class="alert-info-label">旅客類別</span><span class="alert-info-val">'+ev.type+'</span></div><div class="alert-info-row"><span class="alert-info-label">車組</span><span class="alert-info-val">'+(ev.trainGroup||'—')+'</span></div><div class="alert-info-row"><span class="alert-info-label">車門</span><span class="alert-info-val">'+ev.gate+'</span></div><div class="alert-info-row"><span class="alert-info-label">性別</span><span class="alert-info-val">'+ev.gender+'</span></div></div>';}
 function showAlert(type,icon,title,info,extra,btns){alertOpen=true;document.getElementById('alert-box').className='alert-box '+type;document.getElementById('a-icon').textContent=icon;document.getElementById('a-title').textContent=title;document.getElementById('a-info').innerHTML=info;document.getElementById('a-extra').innerHTML=extra||'';document.getElementById('a-btns').innerHTML=btns;document.getElementById('alert-bg').classList.add('open');}
-function closeAlert(){document.getElementById('alert-bg').classList.remove('open');stopLoop();alertOpen=false;setTimeout(flushAlertQueue,300);}
+function closeAlert(){document.getElementById('alert-bg').classList.remove('open');stopLoop();alertOpen=false;currentAlertEventId=null;setTimeout(flushAlertQueue,300);}
 function finishOk(id){
   const ev=events.find(e=>e.id===id);
   if(ev){
@@ -1651,19 +1667,20 @@ function tick(){
     const isMyArrival=CU&&CU.role!=='S'&&ev.to===CU.station;
     if(ms<=180000&&ms>60000&&!wF.has(ev.id)){
       wF.add(ev.id);
-      if(isMyArrival){queueAlert('warn','⚠️','準備就緒提醒　距發車約 3 分鐘',aInfo(ev),'','<button class="btn btn-primary" onclick="closeAlert()"><i class="ti ti-check"></i> 確認，已派員至指定地點</button>','warn');}
+      if(isMyArrival){queueAlert('warn','⚠️','準備就緒提醒　距發車約 3 分鐘',aInfo(ev),'','<button class="btn btn-primary" onclick="closeAlert()"><i class="ti ti-check"></i> 確認，已派員至指定地點</button>','warn',ev.id);}
     }
     if(ms<=90000&&ms>0&&!dF.has(ev.id)){
       dF.add(ev.id);
-      if(isMyArrival){queueAlert('danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" onclick="closeAlert()"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger');}
+      if(isMyArrival){queueAlert('danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" onclick="closeAlert()"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger',ev.id);}
     }
     if(ms<=0&&!doF.has(ev.id)){
       doF.add(ev.id);
-      if(isMyArrival){queueAlert('success','✅','列車已到站',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishOk(this.dataset.id)"><i class="ti ti-check"></i> 已接到旅客</button><button class="btn" style="color:#E24B4A;border-color:#E24B4A;margin-left:8px" data-id="'+ev.id+'" onclick="finishFail(this.dataset.id)"><i class="ti ti-x"></i> 未接到旅客</button>','success');}
+      if(isMyArrival){queueAlert('success','✅','列車已到站',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishOk(this.dataset.id)"><i class="ti ti-check"></i> 已接到旅客</button><button class="btn" style="color:#E24B4A;border-color:#E24B4A;margin-left:8px" data-id="'+ev.id+'" onclick="finishFail(this.dataset.id)"><i class="ti ti-x"></i> 未接到旅客</button>','success',ev.id);}
     }
     /* 自動結案：發車超過 10 分鐘仍未結案 → 自動寫入歷史（超時）並刪除 */
     if(ms<-600000&&!autoCloseF.has(ev.id)){
       autoCloseF.add(ev.id);
+      removeAlertForEvent(ev.id);/* 清除卡住的彈窗，讓後續事件能正常通知 */
       const now2=new Date();
       const mm2=(now2.getMonth()+1).toString().padStart(2,'0');
       const dd2=now2.getDate().toString().padStart(2,'0');
@@ -2090,14 +2107,14 @@ Object.assign(window,{
   loadSoundSettings, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onSReasonChange,
   onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT, openFilePreview,
   openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS,
-  playCurrentSoundCS, playSoundPreview, queueAlert, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList, renderEvents,
-  renderHistory, renderLog, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, resetDevice,
-  resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveTTToDb,
-  selCalSv, selCalType, selSoundPreset, setEventFilter, setSFilter, showAlert, showPage, showToast,
-  speakArrivalNotice, speakArrivalNoticeVol, speakDanger, startEventsListener, startLock, startLoop, stopLoop, submitEditTT,
-  submitEvent, submitFail, submitNewTT, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleLoginEye,
-  togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb,
-  updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  playCurrentSoundCS, playSoundPreview, queueAlert, refreshSoundCurrent, removeAlertForEvent, renderAccounts, renderCalMain, renderCalSpecialList,
+  renderEvents, renderHistory, renderLog, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable,
+  resetDevice, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit,
+  saveTTToDb, selCalSv, selCalType, selSoundPreset, setEventFilter, setSFilter, showAlert, showPage,
+  showToast, speakArrivalNotice, speakArrivalNoticeVol, speakDanger, startEventsListener, startLock, startLoop, stopLoop,
+  submitEditTT, submitEvent, submitFail, submitNewTT, tick, todayStrTT, toggleAllAcc, toggleAllHist,
+  toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar,
+  updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
 });
 
 
