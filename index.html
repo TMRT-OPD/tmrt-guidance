@@ -735,7 +735,7 @@ function loginSuccess(prevLogin,prevIp){
   /* 存 session 供重整恢復 */
   sessionStorage.setItem('tmrt_session_user', CU.username);
   sessionStorage.setItem('tmrt_session_dt', localStorage.getItem('tmrt_dt_'+CU.username)||'');
-  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadSoundSettings();loadTTVersions();loadCalOvr();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
+  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadTTMode();loadSoundSettings();loadTTVersions();loadCalOvr();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
   /* B 級預設：本站（到站）；S/A 級：全線 */
   eventFilter=CU.role==='B'?'arrive':(CU.role==='S'?'all':'arrive');
   eventFilterStation='all';
@@ -751,6 +751,7 @@ function doLogout(){if(confirm('確定登出？')){
   if(typeof accUnsubscribe==='function'){accUnsubscribe();accUnsubscribe=null;}
   if(typeof historyUnsubscribe==='function'){historyUnsubscribe();historyUnsubscribe=null;}
   if(typeof suspendUnsubscribe==='function'){suspendUnsubscribe();suspendUnsubscribe=null;}
+  if(typeof ttModeUnsubscribe==='function'){ttModeUnsubscribe();ttModeUnsubscribe=null;}
   if(typeof eventsUnsubscribe==='function'){eventsUnsubscribe();eventsUnsubscribe=null;}
   if(typeof ttUnsubscribe==='function'){ttUnsubscribe();ttUnsubscribe=null;}
   if(typeof calUnsubscribe==='function'){calUnsubscribe();calUnsubscribe=null;}
@@ -758,7 +759,7 @@ function doLogout(){if(confirm('確定登出？')){
   sessionStorage.removeItem('tmrt_session_user');
   sessionStorage.removeItem('tmrt_session_dt');
   CU=null;eventsInitialized=false;knownEventIds.clear();
-  LOGS=[];historyData=[];TT_VERSIONS=[];calOvr={};events=[];document.getElementById('main-screen').style.display='none';document.getElementById('login-screen').style.display='flex';document.getElementById('l-acc').value='';document.getElementById('l-pwd').value='';document.getElementById('l-err').textContent='';document.getElementById('l-attempt').textContent='';}}
+  LOGS=[];historyData=[];TT_VERSIONS=[];calOvr={};events=[];ttMode='auto';document.getElementById('main-screen').style.display='none';document.getElementById('login-screen').style.display='flex';document.getElementById('l-acc').value='';document.getElementById('l-pwd').value='';document.getElementById('l-err').textContent='';document.getElementById('l-attempt').textContent='';}}
 function uploadLogo(input){
   const file=input.files[0];if(!file)return;
   const url=URL.createObjectURL(file);
@@ -928,6 +929,29 @@ function loadSuspendStatus(){
     renderSuspendBtn();
   },e=>console.error('暫停狀態監聽失敗',e));
 }
+let ttModeUnsubscribe=null;
+function loadTTMode(){
+  if(ttModeUnsubscribe)ttModeUnsubscribe();
+  ttModeUnsubscribe=onSnapshot(doc(db,'systemStatus','ttMode'),snap=>{
+    ttMode=(snap.exists()&&snap.data().mode)?snap.data().mode:'auto';
+    renderTTBanner();
+    /* 同步更新時刻表版次頁面的下拉選單與顯示 */
+    const sel=document.getElementById('tt-sel');
+    if(sel)sel.value=ttMode;
+    const cur=document.getElementById('tt-current');
+    if(cur){
+      const isM=ttMode!=='auto';
+      const tag=isM?'<span class="tt-manual-tag">手動指定（已套用）</span>':'<span class="tt-auto-tag">自動（已套用）</span>';
+      cur.innerHTML=tag+'<span>'+(isM?(TT_LABELS[ttMode]||TT_LABELS.auto):'目前判斷結果：'+getTodayTTName())+'</span>';
+    }
+    renderEvents();/* 時刻表切換後重新計算事件迄站時間顯示 */
+  },e=>console.error('時刻表模式監聽失敗',e));
+}
+async function saveTTMode(mode){
+  try{
+    await setDoc(doc(db,'systemStatus','ttMode'),{mode,by:CU?CU.username+'·'+CU.name:'',at:new Date()});
+  }catch(e){console.error('儲存時刻表模式失敗',e);}
+}
 async function saveSuspendStatus(isSuspended,reason){
   try{
     await setDoc(doc(db,'systemStatus','suspend'),{
@@ -1009,7 +1033,12 @@ function renderSuspendOverlay(){
 }
 function renderSuspendBtn(){const w=document.getElementById('suspend-btn-area');if(!w)return;w.innerHTML=suspended?'<button class="btn btn-restore btn-sm" onclick="executeRestore()"><i class="ti ti-player-play"></i> 恢復使用</button>':'<button class="btn btn-warning btn-sm" onclick="openSuspendModal()"><i class="ti ti-player-pause"></i> 暫停本頁面使用</button>';}
 function onTTChange(){const v=document.getElementById('tt-sel').value;const cur=document.getElementById('tt-current');const tag=v==='auto'?'<span class="tt-auto-tag">自動</span>':'<span class="tt-manual-tag">手動指定</span>';cur.innerHTML=tag+'<span>'+(v==='auto'?'目前自動判斷結果：'+TT_LABELS.auto:'選擇後點套用生效')+'</span>';}
-function applyTT(){ttMode=document.getElementById('tt-sel').value;const cur=document.getElementById('tt-current');const isM=ttMode!=='auto';const tag=isM?'<span class="tt-manual-tag">手動指定（已套用）</span>':'<span class="tt-auto-tag">自動（已套用）</span>';cur.innerHTML=tag+'<span>'+(TT_LABELS[ttMode]||TT_LABELS.auto)+'</span>';renderTTBanner();showToast(isM?'已手動套用時刻表版次':'已切換回自動判斷');}
+async function applyTT(){
+  const mode=document.getElementById('tt-sel').value;
+  await saveTTMode(mode);
+  addLog('edit',mode==='auto'?'時刻表版次切換回自動判斷':'手動指定時刻表版次：'+(TT_LABELS[mode]||mode));
+  showToast(mode==='auto'?'已切換回自動判斷，所有帳號同步生效':'已手動套用時刻表版次，所有帳號同步生效');
+}
 function openSuspendModal(){document.getElementById('s-reason').value='';document.getElementById('s-other-wrap').style.display='none';document.getElementById('s-reason-err').textContent='';document.getElementById('s-other-err').textContent='';document.getElementById('modal-suspend').classList.add('open');}
 function onSReasonChange(){document.getElementById('s-other-wrap').style.display=document.getElementById('s-reason').value==='other'?'block':'none';document.getElementById('s-reason-err').textContent='';document.getElementById('s-other-err').textContent='';}
 async function executeSuspend(){const sel=document.getElementById('s-reason').value;const other=document.getElementById('s-other').value.trim();if(!sel){document.getElementById('s-reason-err').innerHTML='<i class="ti ti-alert-circle"></i> 請選擇暫停原因';return;}if(sel==='other'&&!other){document.getElementById('s-other-err').innerHTML='<i class="ti ti-alert-circle"></i> 請填寫說明';return;}const reason=sel==='other'?other:sel;ttMode='auto';document.getElementById('modal-suspend').classList.remove('open');await saveSuspendStatus(true,reason);addLog('edit','暫停系統使用：'+reason);showToast('已暫停使用（'+reason+'），所有帳號將同步看到');}
@@ -1568,7 +1597,13 @@ function applyNavRole(){
 
 function showPage(el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.getElementById('page-'+el.dataset.page).classList.add('active');el.classList.add('active');}
 function getCurrentTimetable(dir){
-  /* 根據當前時刻表模式選擇正確資料 */
+  /* S級手動指定時刻表版次：優先於行事曆自動判斷，全帳號同步生效 */
+  if(ttMode&&ttMode!=='auto'){
+    if(ttMode==='H1')return dir==='down'?TH1D:TH1U;
+    if(ttMode==='H2')return dir==='down'?THRD:THRU;
+    if(ttMode==='W05')return dir==='down'?TD:TU;
+  }
+  /* 根據當前時刻表模式選擇正確資料（行事曆自動判斷）*/
   const today2=new Date();
   const k2=calKey(today2.getFullYear(),today2.getMonth()+1,today2.getDate());
   const entry=calOvr&&calOvr[k2]?calOvr[k2]:(H26[k2]?{type:H26[k2]}:null);
@@ -2140,17 +2175,18 @@ Object.assign(window,{
   fmt, fmtCd, ga, getArrivalTime, getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation,
   getFilteredEvents, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, handleCalImportFile, handleEditTTFile, handleNewTTFile,
   handleSoundUpload, initTTTableEvents, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadHistory, loadLogs,
-  loadSoundSettings, loadSuspendStatus, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2,
-  onSReasonChange, onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT,
-  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
-  playCS, playCurrentSoundCS, playSoundPreview, queueAlert, refreshSoundCurrent, removeAlertForEvent, renderAccounts, renderCalMain,
-  renderCalSpecialList, renderEvents, renderHistory, renderLog, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner,
-  renderTTTable, resetDevice, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb,
-  saveHistoryEdit, saveSuspendStatus, saveTTToDb, selCalSv, selCalType, selSoundPreset, setEventFilter, setSFilter,
-  showAlert, showPage, showToast, speakArrivalNotice, speakArrivalNoticeVol, speakDanger, startEventsListener, startLock,
-  startLoop, stopLoop, submitEditTT, submitEvent, submitFail, submitNewTT, tick, todayStrTT,
-  toggleAllAcc, toggleAllHist, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2,
-  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr,
+  nowStr2, onSReasonChange, onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal,
+  openEditTT, openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal,
+  parseNote, playCS, playCurrentSoundCS, playSoundPreview, queueAlert, refreshSoundCurrent, removeAlertForEvent, renderAccounts,
+  renderCalMain, renderCalSpecialList, renderEvents, renderHistory, renderLog, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay,
+  renderTTBanner, renderTTTable, resetDevice, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit,
+  saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset,
+  setEventFilter, setSFilter, showAlert, showPage, showToast, speakArrivalNotice, speakArrivalNoticeVol, speakDanger,
+  startEventsListener, startLock, startLoop, stopLoop, submitEditTT, submitEvent, submitFail, submitNewTT,
+  tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar,
+  updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains,
+  uploadLogo
 });
 
 
