@@ -430,13 +430,20 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <!-- 操作記錄 -->
 <div class="page" id="page-log">
   <div class="topbar"><div class="topbar-title">操作記錄</div><button class="btn" onclick="exportLog()"><i class="ti ti-download"></i>匯出 Excel</button></div>
-  <div class="filter-bar">
+  <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
     <select id="lf-op" onchange="filterLog()"><option value="">全部操作</option><option value="login">登入</option><option value="create">新增事件</option><option value="edit">編輯事件</option><option value="delete">刪除事件</option><option value="suspend">暫停/恢復</option><option value="upload">上傳時刻表</option><option value="export">匯出報表</option></select>
     <select id="lf-role" onchange="filterLog()"><option value="">全部層級</option><option value="S">S 級</option><option value="A">A 級</option><option value="B">B 級</option></select>
-    <button class="btn btn-sm" onclick="document.getElementById('lf-op').value='';document.getElementById('lf-role').value='';filterLog()"><i class="ti ti-refresh"></i> 重置</button>
+    <select id="lf-month" onchange="onLogMonthChange()" style="min-width:130px"><option value="">月份快速選擇</option></select>
+    <input type="date" id="lf-date-start" onchange="document.getElementById('lf-month').value='';filterLog()" style="font-size:12px">
+    <span style="font-size:12px;color:var(--color-text-tertiary)">至</span>
+    <input type="date" id="lf-date-end" onchange="document.getElementById('lf-month').value='';filterLog()" style="font-size:12px">
+    <button class="btn btn-sm" onclick="resetLogFilter()"><i class="ti ti-refresh"></i> 重置篩選</button>
   </div>
   <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>層</th><th>操作</th><th>內容</th><th>IP</th><th>結果</th></tr></thead><tbody id="log-body"></tbody></table></div>
-  <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px" id="log-count"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+    <div style="font-size:11px;color:var(--color-text-tertiary)" id="log-count"></div>
+    <div style="display:flex;gap:6px;align-items:center" id="log-pagination"></div>
+  </div>
 </div>
 
 <!-- 音效設定 -->
@@ -1139,11 +1146,96 @@ async function loadLogs(){
   try{
     const snap=await getDocs(query(collection(db,'logs'),orderBy('createdAt','desc')));
     LOGS=snap.docs.map(d=>({...d.data(),id:d.id}));
+    populateLogMonthOptions();
     renderLog(LOGS);
   }catch(e){console.error('載入Log失敗',e);}
 }
-function renderLog(data){const rb={S:'badge-purple',A:'badge-blue',B:'badge-gray'};document.getElementById('log-body').innerHTML=data.map(r=>`<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">${r.time}</td><td style="font-size:11px;font-weight:500">${r.acc}</td><td>${r.name}</td><td><span class="badge ${rb[r.role]||'badge-gray'}">${r.role}</span></td><td><span class="log-op-badge ${r.ok?OP_C[r.op]:'op-fail'}">${OP_L[r.op]||r.op}</span></td><td style="font-size:11px;color:var(--color-text-secondary)">${r.desc}</td><td style="font-size:11px;font-family:monospace">${r.ip}</td><td style="${r.ok?'color:#1D9E75':'color:#E24B4A'};font-size:13px">${r.ok?'✓':'✗'}</td></tr>`).join('');document.getElementById('log-count').textContent='共 '+data.length+' 筆記錄';}
-function filterLog(){const op=document.getElementById('lf-op').value,role=document.getElementById('lf-role').value;renderLog(LOGS.filter(r=>(!op||r.op===op)&&(!role||r.role===role)));}
+const LOG_PAGE_SIZE=20;
+let logPage=1,logFilteredCache=[];
+
+function renderLog(data){
+  logFilteredCache=data;
+  const totalPages=Math.max(1,Math.ceil(data.length/LOG_PAGE_SIZE));
+  if(logPage>totalPages)logPage=totalPages;
+  if(logPage<1)logPage=1;
+  const startIdx=(logPage-1)*LOG_PAGE_SIZE;
+  const pageData=data.slice(startIdx,startIdx+LOG_PAGE_SIZE);
+  const rb={S:'badge-purple',A:'badge-blue',B:'badge-gray'};
+  document.getElementById('log-body').innerHTML=pageData.map(r=>`<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">${r.time}</td><td style="font-size:11px;font-weight:500">${r.acc}</td><td>${r.name}</td><td><span class="badge ${rb[r.role]||'badge-gray'}">${r.role}</span></td><td><span class="log-op-badge ${r.ok?OP_C[r.op]:'op-fail'}">${OP_L[r.op]||r.op}</span></td><td style="font-size:11px;color:var(--color-text-secondary)">${r.desc}</td><td style="font-size:11px;font-family:monospace">${r.ip}</td><td style="${r.ok?'color:#1D9E75':'color:#E24B4A'};font-size:13px">${r.ok?'✓':'✗'}</td></tr>`).join('');
+  document.getElementById('log-count').textContent='共 '+data.length+' 筆記錄'+(totalPages>1?'　第 '+logPage+' / '+totalPages+' 頁':'');
+  renderLogPagination(totalPages);
+}
+function renderLogPagination(totalPages){
+  const w=document.getElementById('log-pagination');
+  if(!w)return;
+  if(totalPages<=1){w.innerHTML='';return;}
+  let html='<button class="btn btn-sm" '+(logPage<=1?'disabled':'')+' onclick="goLogPage('+(logPage-1)+')"><i class="ti ti-chevron-left"></i></button>';
+  const pages=[];
+  for(let p=1;p<=totalPages;p++){
+    if(p===1||p===totalPages||Math.abs(p-logPage)<=1)pages.push(p);
+    else if(pages[pages.length-1]!=='…')pages.push('…');
+  }
+  pages.forEach(p=>{
+    if(p==='…'){html+='<span style="padding:0 4px;color:var(--color-text-tertiary)">…</span>';}
+    else{html+='<button class="btn btn-sm" style="'+(p===logPage?'background:#378ADD;color:#fff;border-color:#378ADD':'')+'" onclick="goLogPage('+p+')">'+p+'</button>';}
+  });
+  html+='<button class="btn btn-sm" '+(logPage>=totalPages?'disabled':'')+' onclick="goLogPage('+(logPage+1)+')"><i class="ti ti-chevron-right"></i></button>';
+  w.innerHTML=html;
+}
+function goLogPage(p){logPage=p;renderLog(logFilteredCache);}
+function populateLogMonthOptions(){
+  const sel=document.getElementById('lf-month');
+  if(!sel||sel.dataset.filled)return;
+  const months=new Set();
+  LOGS.forEach(r=>{const m=r.time&&r.time.match(/^(\d{4})\/(\d{2})/);if(m)months.add(m[1]+'/'+m[2]);});
+  [...months].sort().reverse().forEach(ym=>{
+    const[y,m]=ym.split('/');
+    const opt=document.createElement('option');
+    opt.value=ym;opt.textContent=y+' 年 '+m+' 月';
+    sel.appendChild(opt);
+  });
+  sel.dataset.filled='1';
+}
+function onLogMonthChange(){
+  const ym=document.getElementById('lf-month').value;
+  if(ym){
+    const[y,m]=ym.split('/');
+    const lastDay=new Date(parseInt(y),parseInt(m),0).getDate();
+    document.getElementById('lf-date-start').value=y+'-'+m+'-01';
+    document.getElementById('lf-date-end').value=y+'-'+m+'-'+lastDay.toString().padStart(2,'0');
+  } else {
+    document.getElementById('lf-date-start').value='';
+    document.getElementById('lf-date-end').value='';
+  }
+  logPage=1;filterLog();
+}
+function resetLogFilter(){
+  document.getElementById('lf-op').value='';
+  document.getElementById('lf-role').value='';
+  document.getElementById('lf-month').value='';
+  document.getElementById('lf-date-start').value='';
+  document.getElementById('lf-date-end').value='';
+  logPage=1;filterLog();
+}
+function filterLog(){
+  const op=document.getElementById('lf-op').value,role=document.getElementById('lf-role').value;
+  const dateStart=document.getElementById('lf-date-start').value;
+  const dateEnd=document.getElementById('lf-date-end').value;
+  logPage=1;
+  const filtered=LOGS.filter(r=>{
+    if(op&&r.op!==op)return false;
+    if(role&&r.role!==role)return false;
+    if(dateStart||dateEnd){
+      const m=r.time&&r.time.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+      if(!m)return false;
+      const rDate=m[1]+'-'+m[2]+'-'+m[3];
+      if(dateStart&&rDate<dateStart)return false;
+      if(dateEnd&&rDate>dateEnd)return false;
+    }
+    return true;
+  });
+  renderLog(filtered);
+}
 
 /* ── 匯出工具 ── */
 function csvEscape(v){const s=String(v===null||v===undefined?'':v);return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;}
@@ -1155,9 +1247,7 @@ function downloadCsv(filename,rows,headers){
   a.download=filename;a.click();URL.revokeObjectURL(a.href);
 }
 function exportLog(){
-  const op=document.getElementById('lf-op').value;
-  const role=document.getElementById('lf-role').value;
-  const filtered=LOGS.filter(r=>(!op||r.op===op)&&(!role||r.role===role));
+  const filtered=logFilteredCache.length?logFilteredCache:LOGS;
   if(!filtered.length){showToast('目前沒有符合條件的記錄');return;}
   const headers=['時間','帳號','姓名','層級','操作','內容','IP','結果'];
   const rows=filtered.map(r=>[r.time,r.acc,r.name,r.role,r.op,r.desc,r.ip||'—',r.ok?'成功':'失敗']);
@@ -2272,19 +2362,20 @@ Object.assign(window,{
   deleteTTFromDb, doCalImport, doLogin, doLogout, downloadCsv, executeRestore, executeSuspend, exportCustomReport,
   exportLog, exportMonthReport, filterLog, finishFail, finishOk, fmt, fmtCd, ga,
   getArrivalTime, getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents, getNextN, getSelectedAccIds,
-  getTodayTTName, getTodayTTType, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, isCalDeleted,
-  isMgmtUnit, loadAccounts, loadCalOvr, loadHistory, loadLogs, loadSoundSettings, loadSuspendStatus, loadTTMode,
-  loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onSReasonChange, onTTChange,
-  openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT, openFilePreview, openHistoryEdit,
-  openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS, playCurrentSoundCS,
-  playSoundPreview, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList, renderEvents, renderHistory, renderLog,
-  renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, resetDevice, resetSoundCS, saveAcc,
-  saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb,
-  selCalSv, selCalType, selSoundPreset, setEventFilter, setSFilter, showAlertCard, showPage, showToast,
-  speakArrivalNotice, speakArrivalNoticeVol, speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock,
-  stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, tick, todayStrTT, toggleAllAcc,
-  toggleAllHist, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb,
-  updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  getTodayTTName, getTodayTTType, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents,
+  isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadHistory, loadLogs, loadSoundSettings, loadSuspendStatus,
+  loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onLogMonthChange,
+  onSReasonChange, onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT,
+  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
+  playCS, playCurrentSoundCS, playSoundPreview, populateLogMonthOptions, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
+  renderEvents, renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner,
+  renderTTTable, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit,
+  saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset,
+  setEventFilter, setSFilter, showAlertCard, showPage, showToast, speakArrivalNotice, speakArrivalNoticeVol, speakDangerForCard,
+  speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
+  submitFail, submitNewTT, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleLoginEye, togglePwd,
+  ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd,
+  updateSoundVol, updateTrains, uploadLogo
 });
 
 
