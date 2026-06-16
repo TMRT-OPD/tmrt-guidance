@@ -422,14 +422,14 @@ input[type=range]{flex:1;accent-color:#378ADD}
   <div class="topbar"><div class="topbar-title">匯出報表</div></div>
   <div class="notify-bar"><i class="ti ti-bell"></i>系統偵測到本月尚未下載 5 月份月報，請點擊下方按鈕下載。</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div class="card card-pad"><div style="font-size:13px;font-weight:500;margin-bottom:10px">月報（自動產生）</div><div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">2026 年 5 月份月報已就緒</div><button class="btn btn-primary" style="width:100%"><i class="ti ti-download"></i>下載 5 月份月報</button></div>
-    <div class="card card-pad"><div style="font-size:13px;font-weight:500;margin-bottom:10px">自訂區間報表</div><div class="form-group"><div class="form-label">開始日期</div><input type="date" id="report-start"></div><div class="form-group" style="margin-top:8px"><div class="form-label">結束日期</div><input type="date" id="report-end"></div><button class="btn" style="margin-top:10px;width:100%"><i class="ti ti-download"></i>匯出 Excel</button></div>
+    <div class="card card-pad"><div style="font-size:13px;font-weight:500;margin-bottom:10px">月報（自動產生）</div><div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px" id="month-report-label">讀取中...</div><button class="btn btn-primary" style="width:100%" onclick="exportMonthReport()"><i class="ti ti-download"></i>下載月報</button></div>
+    <div class="card card-pad"><div style="font-size:13px;font-weight:500;margin-bottom:10px">自訂區間報表</div><div class="form-group"><div class="form-label">開始日期</div><input type="date" id="report-start"></div><div class="form-group" style="margin-top:8px"><div class="form-label">結束日期</div><input type="date" id="report-end"></div><button class="btn" style="margin-top:10px;width:100%" onclick="exportCustomReport()"><i class="ti ti-download"></i>匯出 Excel</button></div>
   </div>
 </div>
 
 <!-- 操作記錄 -->
 <div class="page" id="page-log">
-  <div class="topbar"><div class="topbar-title">操作記錄</div><button class="btn" onclick="showToast('匯出中...')"><i class="ti ti-download"></i>匯出 Excel</button></div>
+  <div class="topbar"><div class="topbar-title">操作記錄</div><button class="btn" onclick="exportLog()"><i class="ti ti-download"></i>匯出 Excel</button></div>
   <div class="filter-bar">
     <select id="lf-op" onchange="filterLog()"><option value="">全部操作</option><option value="login">登入</option><option value="create">新增事件</option><option value="edit">編輯事件</option><option value="delete">刪除事件</option><option value="suspend">暫停/恢復</option><option value="upload">上傳時刻表</option><option value="export">匯出報表</option></select>
     <select id="lf-role" onchange="filterLog()"><option value="">全部層級</option><option value="S">S 級</option><option value="A">A 級</option><option value="B">B 級</option></select>
@@ -1145,6 +1145,64 @@ async function loadLogs(){
 function renderLog(data){const rb={S:'badge-purple',A:'badge-blue',B:'badge-gray'};document.getElementById('log-body').innerHTML=data.map(r=>`<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">${r.time}</td><td style="font-size:11px;font-weight:500">${r.acc}</td><td>${r.name}</td><td><span class="badge ${rb[r.role]||'badge-gray'}">${r.role}</span></td><td><span class="log-op-badge ${r.ok?OP_C[r.op]:'op-fail'}">${OP_L[r.op]||r.op}</span></td><td style="font-size:11px;color:var(--color-text-secondary)">${r.desc}</td><td style="font-size:11px;font-family:monospace">${r.ip}</td><td style="${r.ok?'color:#1D9E75':'color:#E24B4A'};font-size:13px">${r.ok?'✓':'✗'}</td></tr>`).join('');document.getElementById('log-count').textContent='共 '+data.length+' 筆記錄';}
 function filterLog(){const op=document.getElementById('lf-op').value,role=document.getElementById('lf-role').value;renderLog(LOGS.filter(r=>(!op||r.op===op)&&(!role||r.role===role)));}
 
+/* ── 匯出工具 ── */
+function csvEscape(v){const s=String(v===null||v===undefined?'':v);return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;}
+function downloadCsv(filename,rows,headers){
+  const bom='\uFEFF';/* BOM 讓 Excel 正確辨識 UTF-8 中文 */
+  const csv=bom+[headers,...rows].map(r=>r.map(csvEscape).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=filename;a.click();URL.revokeObjectURL(a.href);
+}
+function exportLog(){
+  const op=document.getElementById('lf-op').value;
+  const role=document.getElementById('lf-role').value;
+  const filtered=LOGS.filter(r=>(!op||r.op===op)&&(!role||r.role===role));
+  if(!filtered.length){showToast('目前沒有符合條件的記錄');return;}
+  const headers=['時間','帳號','姓名','層級','操作','內容','IP','結果'];
+  const rows=filtered.map(r=>[r.time,r.acc,r.name,r.role,r.op,r.desc,r.ip||'—',r.ok?'成功':'失敗']);
+  const now=new Date();
+  downloadCsv('操作記錄_'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'.csv',rows,headers);
+  addLog('export','匯出操作記錄（'+filtered.length+'筆）');
+  showToast('匯出完成（'+filtered.length+'筆）');
+}
+function exportCustomReport(){
+  const start=document.getElementById('report-start').value;
+  const end=document.getElementById('report-end').value;
+  if(!start||!end){showToast('請選擇開始和結束日期');return;}
+  const s=new Date(start);const e=new Date(end);e.setHours(23,59,59,999);
+  const filtered=historyData.filter(r=>{
+    if(!r.time)return false;
+    /* time 格式 MM/DD HH:mm，補上今年 */
+    const parts=r.time.match(/(\d+)\/(\d+)\s+(\d+):(\d+)/);
+    if(!parts)return false;
+    const d=new Date(new Date().getFullYear(),parseInt(parts[1])-1,parseInt(parts[2]),parseInt(parts[3]),parseInt(parts[4]));
+    return d>=s&&d<=e;
+  });
+  if(!filtered.length){showToast('選定區間內沒有歷史記錄');return;}
+  const headers=['時間','路線','方向','類別','車組','狀態','建立者','備註','原因'];
+  const rows=filtered.map(r=>[r.time,r.from+'→'+r.to,r.dir==='down'?'下行':'上行',r.type,r.trainGroup||'—',r.status,r.creator,r.note||'',r.reason||'']);
+  downloadCsv('歷史報表_'+start+'_'+end+'.csv',rows,headers);
+  addLog('export','匯出自訂區間報表（'+start+'~'+end+'，'+filtered.length+'筆）');
+  showToast('匯出完成（'+filtered.length+'筆）');
+}
+function exportMonthReport(){
+  const now=new Date();
+  const y=now.getFullYear();const m=now.getMonth();/* 上個月 */
+  const targetY=m===0?y-1:y;const targetM=m===0?12:m;
+  const filtered=historyData.filter(r=>{
+    if(!r.time)return false;
+    const parts=r.time.match(/(\d+)\/(\d+)/);
+    if(!parts)return false;
+    return parseInt(parts[1])===targetM;
+  });
+  const headers=['時間','路線','方向','類別','車組','狀態','建立者','備註','原因'];
+  const rows=filtered.map(r=>[r.time,r.from+'→'+r.to,r.dir==='down'?'下行':'上行',r.type,r.trainGroup||'—',r.status,r.creator,r.note||'',r.reason||'']);
+  downloadCsv(targetY+'年'+targetM+'月報表.csv',rows,headers);
+  addLog('export','匯出'+targetM+'月份月報（'+filtered.length+'筆）');
+  showToast('已匯出 '+targetM+' 月份月報（'+filtered.length+'筆）');
+}
+
 /* ── 語音通知（新增事件通知迄站） ── */
 function speakArrivalNotice(){
   speakArrivalNoticeVol(SC.notify.vol/100);
@@ -1612,7 +1670,23 @@ function applyNavRole(){
   /* B級：新增事件按鈕只有本站（已存在邏輯），此處不另外處理 */
 }
 
-function showPage(el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.getElementById('page-'+el.dataset.page).classList.add('active');el.classList.add('active');}
+function showPage(el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+el.dataset.page).classList.add('active');
+  el.classList.add('active');
+  /* 切換到報表頁時更新月報標籤 */
+  if(el.dataset.page==='report'){
+    const now=new Date();
+    const m=now.getMonth()===0?12:now.getMonth();
+    const y=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const lb=document.getElementById('month-report-label');
+    if(lb)lb.textContent=y+' 年 '+m+' 月份月報已就緒';
+    /* 更新 notify-bar */
+    const nb=document.querySelector('#page-report .notify-bar');
+    if(nb)nb.innerHTML='<i class="ti ti-bell"></i>點擊下方按鈕下載 '+y+' 年 '+m+' 月份月報，或自訂日期區間匯出。';
+  }
+}
 function getCurrentTimetable(dir){
   /* S級手動指定時刻表版次：優先於行事曆自動判斷，全帳號同步生效 */
   if(ttMode&&ttMode!=='auto'){
@@ -2187,22 +2261,23 @@ Object.assign(window,{
   batchDeleteAcc, batchDeleteHistory, batchResetDevice, bindLoginEvents, bip, buildEventFilter, buildNote, buildSound,
   calKey, calNextMonth, calPrevMonth, calcDir, cdCls, clearAccSelection, clearHistSelection, clearLoginErr,
   clearNF, closeAlertCard, closeCalEdit, closeFormModal, closeMobileMenu, closeSoundReplace, confirmDeleteTT, confirmSoundReplace,
-  delEvent, deleteAcc, deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport,
-  doLogin, doLogout, executeRestore, executeSuspend, filterLog, finishFail, finishOk, fmt,
-  fmtCd, ga, getArrivalTime, getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents,
-  getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload,
-  initTTTableEvents, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadHistory, loadLogs, loadSoundSettings,
-  loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2,
-  onSReasonChange, onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT,
-  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
-  playCS, playCurrentSoundCS, playSoundPreview, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList, renderEvents,
-  renderHistory, renderLog, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, resetDevice,
-  resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus,
-  saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, setEventFilter, setSFilter, showAlertCard,
-  showPage, showToast, speakArrivalNotice, speakArrivalNoticeVol, speakDangerForCard, speakDangerPreview, startCardLoop, startEventsListener,
-  startLock, stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, tick, todayStrTT,
-  toggleAllAcc, toggleAllHist, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2,
-  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  csvEscape, delEvent, deleteAcc, deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb,
+  doCalImport, doLogin, doLogout, downloadCsv, executeRestore, executeSuspend, exportCustomReport, exportLog,
+  exportMonthReport, filterLog, finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime,
+  getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents, getNextN, getSelectedAccIds, getTodayTTName,
+  getTodayTTType, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, isCalDeleted, isMgmtUnit,
+  loadAccounts, loadCalOvr, loadHistory, loadLogs, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions,
+  loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onSReasonChange, onTTChange, openAccEdit,
+  openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT, openFilePreview, openHistoryEdit, openMobileMenu,
+  openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS, playCurrentSoundCS, playSoundPreview,
+  refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList, renderEvents, renderHistory, renderLog, renderSoundReplaceList,
+  renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, resetDevice, resetSoundCS, saveAcc, saveAccToDb,
+  saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv,
+  selCalType, selSoundPreset, setEventFilter, setSFilter, showAlertCard, showPage, showToast, speakArrivalNotice,
+  speakArrivalNoticeVol, speakDangerForCard, speakDangerPreview, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT,
+  submitEvent, submitFail, submitNewTT, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleLoginEye,
+  togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb,
+  updateLockCd, updateSoundVol, updateTrains, uploadLogo
 });
 
 
