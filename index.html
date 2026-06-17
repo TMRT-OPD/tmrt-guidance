@@ -345,25 +345,46 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <!-- 系統操作說明 -->
 <div class="page" id="page-guide">
   <div class="topbar"><div class="topbar-title">系統操作說明</div></div>
-  <div class="card card-pad" style="max-width:760px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-info-circle" style="color:#378ADD"></i>本系統使用須知</div>
-    <div style="display:flex;flex-direction:column;gap:16px">
-      <div style="display:flex;gap:12px">
-        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">1</div>
-        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統因應號誌資安考量，未與行控中心 ATS 系統串接，所有班次資訊均參照行控中心公告之發車時刻表進行計算與顯示。</div>
+  <div style="max-width:780px">
+    <div style="background:linear-gradient(135deg,#2d6fb0,#378ADD);border-radius:var(--border-radius-lg);padding:20px 24px;margin-bottom:18px;color:#fff">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><i class="ti ti-shield-check" style="font-size:20px"></i><span style="font-size:16px;font-weight:600">本系統使用須知</span></div>
+      <div style="font-size:12px;opacity:0.85;line-height:1.6">使用本系統前，請站務人員詳閱以下四項重要事項</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #378ADD;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+        <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-plug-connected-x"></i></div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#0c447c;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">系統定位</div>
+          <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統因應號誌資安考量，未與行控中心 ATS 系統串接，所有班次資訊均參照行控中心公告之發車時刻表進行計算與顯示。</div>
+        </div>
       </div>
-      <div style="display:flex;gap:12px">
-        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">2</div>
-        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">遇交通尖峰時段、列車臨時延靠等狀況，實際發車時間可能與系統顯示時間產生誤差，請提前至月台就定位，以免錯過列車。</div>
+
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #EF9F27;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+        <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#FAEEDA;color:#9a5b0a;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-clock-exclamation"></i></div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#9a5b0a;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">時間誤差提醒</div>
+          <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">遇交通尖峰時段、列車臨時延靠等狀況，實際發車時間可能與系統顯示時間產生誤差，請提前至月台就定位，以免錯過列車。</div>
+        </div>
       </div>
-      <div style="display:flex;gap:12px">
-        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">3</div>
-        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">如遇地震、強風、颱風、系統或設備異常等突發事件，本系統將暫停使用，請依現場廣播及行控中心指示處理。</div>
+
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #E24B4A;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+        <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#FCEBEB;color:#A32D2D;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-alert-triangle"></i></div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#A32D2D;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">異常事件停用</div>
+          <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">如遇地震、強風、颱風、系統或設備異常等突發事件，本系統將暫停使用，請依現場廣播及行控中心指示處理。</div>
+        </div>
       </div>
-      <div style="display:flex;gap:12px">
-        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">4</div>
-        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統僅作為站務人員執行旅客引導作業之輔助工具，所有引導決策與現場應變仍應以實際情況及行控中心指示為準。</div>
+
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #1D9E75;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+        <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#EAF3DE;color:#3B6D11;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-tool"></i></div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#3B6D11;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">輔助工具性質</div>
+          <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統僅作為站務人員執行旅客引導作業之輔助工具，所有引導決策與現場應變仍應以實際情況及行控中心指示為準。</div>
+        </div>
       </div>
+
     </div>
   </div>
 </div>
@@ -812,9 +833,9 @@ function renderAccounts(){
       <td style="font-size:11px">${u.ip?'<span style="font-family:var(--font-mono)">'+ u.ip +'</span>':'<span style="color:var(--color-text-tertiary)">不限制</span>'}</td>
       <td><span class="badge ${u.status==='啟用'?'badge-green':'badge-gray'}">${u.status}</span></td>
       <td style="white-space:nowrap">
-        <div style="display:flex;gap:3px;width:96px">
+        <div style="display:flex;gap:3px">
           <button class="btn btn-sm" onclick="openAccEdit('${u.id}')"><i class="ti ti-edit"></i></button>
-          ${u.role!=='S'?`<button class="btn btn-sm" style="color:#E8861A;border-color:#E8861A" onclick="resetDevice('${u.id}')" title="重置裝置綁定"><i class="ti ti-device-mobile-off"></i></button>`:'<span style="width:30px"></span>'}
+          <button class="btn btn-sm" style="color:#E8861A;border-color:#E8861A;${u.role==='S'?'visibility:hidden;pointer-events:none':''}" onclick="${u.role==='S'?'':"resetDevice('"+u.id+"')"}" title="重置裝置綁定"><i class="ti ti-device-mobile-off"></i></button>
           <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" onclick="deleteAcc('${u.id}')"><i class="ti ti-trash"></i></button>
         </div>
       </td>
