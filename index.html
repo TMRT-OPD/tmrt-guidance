@@ -226,6 +226,33 @@ input[type=range]{flex:1;accent-color:#378ADD}
   .layout{display:grid;grid-template-columns:200px 1fr}
 }
 
+/* ── 對話牆 ── */
+.chat-wall{margin-top:16px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);background:var(--color-background-primary);overflow:hidden}
+.chat-wall-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+.chat-wall-body{display:flex;flex-direction:column;height:340px}
+.chat-wall.collapsed .chat-wall-body{display:none}
+.chat-messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{max-width:78%;padding:8px 12px;border-radius:var(--border-radius-lg);font-size:12.5px;line-height:1.5;position:relative}
+.chat-msg.mine{align-self:flex-end;background:#378ADD;color:#fff;border-radius:var(--border-radius-lg) var(--border-radius-lg) 4px var(--border-radius-lg)}
+.chat-msg.theirs{align-self:flex-start;background:var(--color-background-secondary);color:var(--color-text-primary);border-radius:var(--border-radius-lg) var(--border-radius-lg) var(--border-radius-lg) 4px}
+.chat-msg-meta{font-size:10px;opacity:0.7;margin-bottom:3px;display:flex;gap:6px;align-items:center}
+.chat-msg-target{font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,255,255,0.25)}
+.chat-msg.theirs .chat-msg-target{background:#e6f1fb;color:#0c447c}
+.chat-msg-read{font-size:9px;opacity:0.75;margin-top:3px;text-align:right}
+.chat-input-area{border-top:0.5px solid var(--color-border-tertiary);padding:10px 12px;background:var(--color-background-secondary)}
+.chat-target-display{display:flex;align-items:center;gap:6px;font-size:11px;color:#0c447c;cursor:pointer;margin-bottom:8px;padding:4px 8px;background:#e6f1fb;border-radius:var(--border-radius-md);width:fit-content}
+.chat-input-row{display:flex;gap:6px;align-items:center}
+.chat-input-row input{flex:1;font-size:13px;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary)}
+.chat-emoji-btn{flex-shrink:0}
+.emoji-picker{display:flex;flex-wrap:wrap;gap:4px;padding:8px;margin-top:6px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);max-height:120px;overflow-y:auto}
+.emoji-picker span{cursor:pointer;font-size:18px;padding:4px;border-radius:4px}
+.emoji-picker span:hover{background:var(--color-background-secondary)}
+.chat-station-chk{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--border-radius-md);cursor:pointer;font-size:12px}
+.chat-station-chk:hover{background:var(--color-background-secondary)}
+@media (max-width:768px){
+  .chat-wall-body{height:300px}
+  .chat-msg{max-width:88%}
+}
 </style>
 </head>
 <body>
@@ -307,6 +334,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <div class="nav-item" data-page="report" data-min-role="S" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-file-analytics"></i>匯出報表</div>
     <div class="nav-item" data-page="log" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-clipboard-list"></i>操作記錄</div>
     <div class="nav-item" data-page="sound" data-min-role="S" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-volume"></i>音效設定</div>
+    <div class="nav-item" data-page="chatlog" data-min-role="S" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-messages"></i>對話紀錄</div>
   </div>
   <div class="logout-btn" onclick="doLogout()"><i class="ti ti-logout" style="font-size:15px"></i>登出</div>
 </nav>
@@ -325,6 +353,28 @@ input[type=range]{flex:1;accent-color:#378ADD}
     </div>
   </div>
   <div id="event-list" class="event-grid"></div>
+
+  <!-- 對話牆 -->
+  <div class="chat-wall" id="chat-wall">
+    <div class="chat-wall-header">
+      <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-messages" style="font-size:16px;color:#378ADD"></i><span style="font-size:13px;font-weight:600">站務對話牆</span><span style="font-size:11px;color:var(--color-text-tertiary)" id="chat-msg-count"></span></div>
+      <button class="btn btn-sm" onclick="toggleChatWall()" id="chat-toggle-btn"><i class="ti ti-chevron-down"></i></button>
+    </div>
+    <div class="chat-wall-body" id="chat-wall-body">
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-area">
+        <div id="chat-target-display" class="chat-target-display" onclick="openChatTargetModal()">
+          <i class="ti ti-users" style="font-size:13px"></i><span id="chat-target-label">發送給：全站廣播</span><i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px"></i>
+        </div>
+        <div class="chat-input-row">
+          <button class="btn btn-sm chat-emoji-btn" onclick="toggleEmojiPicker()" title="表情符號"><i class="ti ti-mood-smile"></i></button>
+          <input type="text" id="chat-input" placeholder="輸入訊息..." onkeydown="if(event.key==='Enter')sendChatMessage()">
+          <button class="btn btn-primary btn-sm" onclick="sendChatMessage()"><i class="ti ti-send"></i></button>
+        </div>
+        <div id="emoji-picker" class="emoji-picker" style="display:none"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 歷史查詢 -->
@@ -501,6 +551,23 @@ input[type=range]{flex:1;accent-color:#378ADD}
   <div id="sound-cards"></div>
 </div>
 
+<!-- 對話紀錄（S級管理頁） -->
+<div class="page" id="page-chatlog">
+  <div class="topbar"><div class="topbar-title">對話紀錄</div></div>
+  <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
+    <select id="cl-station" onchange="filterChatLog()"><option value="">全部站別／單位</option></select>
+    <input type="date" id="cl-date-start" onchange="filterChatLog()" style="font-size:12px">
+    <span style="font-size:12px;color:var(--color-text-tertiary)">至</span>
+    <input type="date" id="cl-date-end" onchange="filterChatLog()" style="font-size:12px">
+    <button class="btn btn-sm" onclick="resetChatLogFilter()"><i class="ti ti-refresh"></i> 重置篩選</button>
+  </div>
+  <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th><th>已讀</th></tr></thead><tbody id="chatlog-body"></tbody></table></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+    <div style="font-size:11px;color:var(--color-text-tertiary)" id="chatlog-count"></div>
+    <div style="display:flex;gap:6px;align-items:center" id="chatlog-pagination"></div>
+  </div>
+</div>
+
 </div>
 </div>
 </div>
@@ -632,6 +699,28 @@ input[type=range]{flex:1;accent-color:#378ADD}
 </div>
 </div>
 
+<!-- 對話訊息收件對象選擇 Modal -->
+<div class="modal-bg" id="modal-chat-target">
+<div class="modal" style="width:480px">
+  <div class="modal-header"><div class="modal-title">選擇發送對象</div><button class="btn btn-sm" onclick="closeChatTargetModal()"><i class="ti ti-x"></i></button></div>
+  <div class="modal-body">
+    <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;margin-bottom:10px" id="chat-target-all-wrap">
+      <input type="radio" name="chat-target-mode" id="chat-target-all" checked onchange="onChatTargetModeChange()">
+      <i class="ti ti-broadcast" style="font-size:15px;color:#378ADD"></i>
+      <span style="font-size:13px;font-weight:500">全站廣播</span>
+      <span style="font-size:11px;color:var(--color-text-tertiary);margin-left:auto">所有帳號都會看到</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;margin-bottom:12px">
+      <input type="radio" name="chat-target-mode" id="chat-target-custom" onchange="onChatTargetModeChange()">
+      <i class="ti ti-checklist" style="font-size:15px;color:#378ADD"></i>
+      <span style="font-size:13px;font-weight:500">自訂選擇車站／單位</span>
+    </label>
+    <div id="chat-target-station-list" style="display:none;max-height:280px;overflow-y:auto;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px"></div>
+  </div>
+  <div class="modal-footer"><button class="btn" onclick="closeChatTargetModal()">取消</button><button class="btn btn-primary" onclick="confirmChatTarget()"><i class="ti ti-check"></i> 確認</button></div>
+</div>
+</div>
+
 <!-- 警示彈窗 -->
 <div id="alert-stack"></div>
 
@@ -640,7 +729,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <script type="module">
 /* ── Firebase 初始化 ── */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAZhpwsD_z18qRUdYchFCTT4HB7VWcpQQI",
@@ -786,7 +875,7 @@ function loginSuccess(prevLogin,prevIp){
   /* 存 session 供重整恢復 */
   sessionStorage.setItem('tmrt_session_user', CU.username);
   sessionStorage.setItem('tmrt_session_dt', localStorage.getItem('tmrt_dt_'+CU.username)||'');
-  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadTTMode();loadSoundSettings();loadTTVersions();loadCalOvr();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
+  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadTTMode();loadSoundSettings();loadTTVersions();loadCalOvr();loadChatMessages();if(CU.role==='S')loadChatLogAll();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
   /* B 級預設：本站（到站）；S/A 級：全線 */
   eventFilter=CU.role==='B'?'arrive':(CU.role==='S'?'all':'arrive');
   eventFilterStation='all';
@@ -803,6 +892,9 @@ function doLogout(){if(confirm('確定登出？')){
   if(typeof historyUnsubscribe==='function'){historyUnsubscribe();historyUnsubscribe=null;}
   if(typeof suspendUnsubscribe==='function'){suspendUnsubscribe();suspendUnsubscribe=null;}
   if(typeof ttModeUnsubscribe==='function'){ttModeUnsubscribe();ttModeUnsubscribe=null;}
+  if(typeof chatUnsubscribe==='function'){chatUnsubscribe();chatUnsubscribe=null;}
+  if(typeof chatLogUnsubscribe==='function'){chatLogUnsubscribe();chatLogUnsubscribe=null;}
+  chatMessages=[];chatKnownIds=new Set();chatInitialized=false;chatLogAll=[];chatLogFiltered=[];
   if(typeof eventsUnsubscribe==='function'){eventsUnsubscribe();eventsUnsubscribe=null;}
   if(typeof ttUnsubscribe==='function'){ttUnsubscribe();ttUnsubscribe=null;}
   if(typeof calUnsubscribe==='function'){calUnsubscribe();calUnsubscribe=null;}
@@ -1357,6 +1449,11 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
     {id:'n1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則旅客引導訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}},
     {id:'n2',name:'單嗶提示音',tag:'簡短',fn:(v)=>{const a=ga();const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.setValueAtTime(v*0.25,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.start();o.stop(a.currentTime+0.45);}},
     {id:'n3',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}}
+  ],
+  chat:[
+    {id:'c1',name:'輕快雙音',tag:'預設',fn:(v)=>{const a=ga();[[700,0],[950,0.16]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},
+    {id:'c2',name:'氣泡音',tag:'柔和',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(600,a.currentTime);o.frequency.exponentialRampToValueAtTime(900,a.currentTime+0.15);g.gain.setValueAtTime(v*0.2,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.3);o.start();o.stop(a.currentTime+0.35);}},
+    {id:'c3',name:'語音播報',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則新的對話訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}}
   ]};
 
 /* ══ 音效設定（新版） ══ */
@@ -1365,18 +1462,21 @@ const SOUND_SECTIONS_CFG=[
   {k:'danger', icon:'🚨', label:'緊急確認語音提示音（1分30秒警示）', desc:'倒數達90秒時觸發，循環直到確認（語音：引導旅客即將到站，請確認人員是否就定位）'},
   {k:'success',icon:'✅', label:'到站完成音',                  desc:'列車抵達時觸發，重複播放直到按下確認'},
   {k:'notify', icon:'📢', label:'收到引導訊息提醒音',           desc:'其他站新增引導事件、本站為迄站時觸發（語音播報3次）'},
+  {k:'chat',   icon:'💬', label:'收到對話訊息提醒音',           desc:'對話牆收到新訊息時觸發'},
 ];
 const SOUND_DEFAULTS={
   warn:   {type:'preset',id:'w1',name:'雙嗶提示'},
   danger: {type:'voice', id:'dv1',name:'語音播報'},
   success:{type:'preset',id:'s1',name:'上升音階'},
   notify: {type:'voice', id:'v1',name:'語音播報'},
+  chat:   {type:'preset',id:'c1',name:'輕快雙音'},
 };
 const SC={
   warn:   {current:{type:'preset',id:'w1',name:'雙嗶提示'},   vol:70},
   danger: {current:{type:'voice', id:'dv1',name:'語音播報'},  vol:80},
   success:{current:{type:'preset',id:'s1',name:'上升音階'},   vol:70},
   notify: {current:{type:'voice', id:'v1',name:'語音播報'},   vol:80},
+  chat:   {current:{type:'preset',id:'c1',name:'輕快雙音'},   vol:70},
 };
 let soundReplaceKey=null,soundReplaceSel=null,soundReplaceFile=null;
 let soundPlayingId=null,soundPlayInterval=null;
@@ -1430,6 +1530,7 @@ async function saveAllSound(){
     danger:{id:SC.danger.current.id,type:SC.danger.current.type,name:SC.danger.current.name,vol:SC.danger.vol},
     success:{id:SC.success.current.id,type:SC.success.current.type,name:SC.success.current.name,vol:SC.success.vol},
     notify:{id:SC.notify.current.id,type:SC.notify.current.type,name:SC.notify.current.name,vol:SC.notify.vol},
+    chat:{id:SC.chat.current.id,type:SC.chat.current.type,name:SC.chat.current.name,vol:SC.chat.vol},
     by:CU.username+'·'+CU.name,
     at:new Date(),
   };
@@ -1440,6 +1541,267 @@ async function saveAllSound(){
   }catch(e){showToast('儲存失敗：'+e.message);}
 }
 
+/* ══════════ 對話牆功能 ══════════ */
+const EMOJI_LIST=['😀','😃','😅','😊','🙏','👍','👌','✅','❌','⚠️','🚨','⏰','🚶','🦽','👀','📍','🔔','💬','🙇','😢'];
+let chatMessages=[],chatUnsubscribe=null,chatTargetMode='all',chatTargetStations=[],chatWallCollapsed=false,chatKnownIds=new Set(),chatInitialized=false;
+
+const CHAT_STATION_OPTIONS=[
+  {code:'北段辦',name:'北段辦（管理單位）'},{code:'南段辦',name:'南段辦（管理單位）'},
+  ...Object.entries(SN).map(([code,name])=>({code,name:code+' '+name}))
+];
+
+function canSeeChatMsg(msg){
+  if(!CU)return false;
+  if(CU.role==='S')return true;/* S級可在管理頁查全部，但對話牆本身仍依規則顯示 */
+  if(msg.to==='all'||  (Array.isArray(msg.to)&&msg.to.includes('all')))return true;
+  if(Array.isArray(msg.to)&&msg.to.includes(CU.station))return true;
+  if(msg.from===CU.username)return true;/* 自己發送的訊息一定看得到 */
+  return false;
+}
+
+function loadChatMessages(){
+  if(!CU)return;
+  if(chatUnsubscribe)chatUnsubscribe();
+  chatInitialized=false;
+  chatUnsubscribe=onSnapshot(
+    query(collection(db,'chatMessages'),orderBy('createdAt','desc'),limit(30)),
+    snap=>{
+      const incoming=snap.docs.map(d=>{
+        const data=d.data();
+        const createdAt=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():new Date(data.createdAt);
+        return {...data,id:d.id,createdAt};
+      }).reverse();/* 轉成時間正序顯示 */
+      const visible=incoming.filter(canSeeChatMsg);
+      /* 偵測新訊息（非自己發送）以觸發音效 */
+      if(chatInitialized){
+        visible.forEach(m=>{
+          if(!chatKnownIds.has(m.id)&&m.from!==CU.username){
+            speakChatNotice();
+          }
+        });
+      }
+      chatKnownIds=new Set(visible.map(m=>m.id));
+      chatMessages=visible;
+      chatInitialized=true;
+      renderChatMessages();
+    },
+    e=>console.error('對話牆監聽失敗',e)
+  );
+}
+
+function renderChatMessages(){
+  const w=document.getElementById('chat-messages');
+  if(!w)return;
+  const cnt=document.getElementById('chat-msg-count');
+  if(cnt)cnt.textContent=chatMessages.length?'（最近 '+chatMessages.length+' 筆）':'';
+  w.innerHTML=chatMessages.map(m=>{
+    const mine=m.from===CU.username;
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全站':(Array.isArray(m.to)?m.to.join('、'):'');
+    const readCount=Array.isArray(m.readBy)?m.readBy.length:0;
+    const totalTargets=getMsgTargetAccountCount(m);
+    const timeStr=m.createdAt?(m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'';
+    return '<div class="chat-msg '+(mine?'mine':'theirs')+'" data-id="'+m.id+'">'+
+      '<div class="chat-msg-meta">'+(mine?'':'<strong>'+esc(m.fromName||m.from)+'</strong>')+'<span class="chat-msg-target">'+esc(targetLabel)+'</span><span>'+timeStr+'</span></div>'+
+      '<div>'+esc(m.content)+'</div>'+
+      (mine?'<div class="chat-msg-read">已讀 '+readCount+'/'+totalTargets+'</div>':'')+
+      '</div>';
+  }).join('');
+  w.scrollTop=w.scrollHeight;
+  /* 標記目前帳號已讀所有可見訊息 */
+  markChatMessagesRead();
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+
+/* 估算訊息的目標帳號數，用於已讀計算的分母 */
+function getMsgTargetAccountCount(m){
+  if(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all'))){
+    return Math.max(1,ACCOUNTS.length-1);/* 排除發送者自己 */
+  }
+  if(Array.isArray(m.to)){
+    const count=ACCOUNTS.filter(a=>m.to.includes(a.station)&&a.username!==m.from).length;
+    return Math.max(1,count);
+  }
+  return 1;
+}
+
+async function markChatMessagesRead(){
+  if(!CU)return;
+  for(const m of chatMessages){
+    if(m.from===CU.username)continue;
+    if(Array.isArray(m.readBy)&&m.readBy.includes(CU.username))continue;
+    try{
+      await updateDoc(doc(db,'chatMessages',m.id),{readBy:arrayUnion(CU.username)});
+    }catch(e){/* 忽略單筆已讀更新失敗 */}
+  }
+}
+
+function toggleChatWall(){
+  chatWallCollapsed=!chatWallCollapsed;
+  const wall=document.getElementById('chat-wall');
+  const btn=document.getElementById('chat-toggle-btn');
+  if(wall)wall.classList.toggle('collapsed',chatWallCollapsed);
+  if(btn)btn.innerHTML='<i class="ti ti-chevron-'+(chatWallCollapsed?'up':'down')+'"></i>';
+}
+
+function toggleEmojiPicker(){
+  const p=document.getElementById('emoji-picker');
+  if(!p)return;
+  if(p.style.display==='none'){
+    p.innerHTML=EMOJI_LIST.map(e=>'<span onclick="insertEmoji(\''+e+'\')">'+e+'</span>').join('');
+    p.style.display='flex';
+  } else {
+    p.style.display='none';
+  }
+}
+function insertEmoji(e){
+  const input=document.getElementById('chat-input');
+  if(input){input.value+=e;input.focus();}
+}
+
+function openChatTargetModal(){
+  const list=document.getElementById('chat-target-station-list');
+  list.innerHTML=CHAT_STATION_OPTIONS.map(s=>'<label class="chat-station-chk"><input type="checkbox" class="chat-station-cb" value="'+s.code+'" '+(chatTargetStations.includes(s.code)?'checked':'')+'>'+s.name+'</label>').join('');
+  document.getElementById(chatTargetMode==='all'?'chat-target-all':'chat-target-custom').checked=true;
+  list.style.display=chatTargetMode==='custom'?'block':'none';
+  document.getElementById('modal-chat-target').classList.add('open');
+}
+function closeChatTargetModal(){document.getElementById('modal-chat-target').classList.remove('open');}
+function onChatTargetModeChange(){
+  const isCustom=document.getElementById('chat-target-custom').checked;
+  document.getElementById('chat-target-station-list').style.display=isCustom?'block':'none';
+}
+function confirmChatTarget(){
+  const isCustom=document.getElementById('chat-target-custom').checked;
+  if(isCustom){
+    const checked=[...document.querySelectorAll('.chat-station-cb:checked')].map(c=>c.value);
+    if(!checked.length){showToast('請至少選擇一個車站或單位');return;}
+    chatTargetMode='custom';
+    chatTargetStations=checked;
+    document.getElementById('chat-target-label').textContent='發送給：'+checked.join('、');
+  } else {
+    chatTargetMode='all';
+    chatTargetStations=[];
+    document.getElementById('chat-target-label').textContent='發送給：全站廣播';
+  }
+  closeChatTargetModal();
+}
+
+async function sendChatMessage(){
+  if(!CU)return;
+  const input=document.getElementById('chat-input');
+  const content=input.value.trim();
+  if(!content)return;
+  const to=chatTargetMode==='all'?['all']:chatTargetStations;
+  try{
+    await addDoc(collection(db,'chatMessages'),{
+      from:CU.username,fromName:CU.name,fromStation:CU.station,
+      to,content,createdAt:new Date(),readBy:[CU.username]
+    });
+    input.value='';
+    document.getElementById('emoji-picker').style.display='none';
+  }catch(e){showToast('訊息發送失敗：'+e.message);}
+}
+
+/* 對話訊息音效（獨立情境，與 notify 分開）*/
+function speakChatNotice(){
+  playCS('chat');
+}
+
+/* ── S級對話紀錄管理頁面：調閱全部歷史訊息 ── */
+const CHAT_LOG_PAGE_SIZE=20;
+let chatLogAll=[],chatLogFiltered=[],chatLogPage=1,chatLogUnsubscribe=null;
+
+function loadChatLogAll(){
+  if(!CU||CU.role!=='S')return;
+  if(chatLogUnsubscribe)chatLogUnsubscribe();
+  chatLogUnsubscribe=onSnapshot(
+    query(collection(db,'chatMessages'),orderBy('createdAt','desc')),
+    snap=>{
+      chatLogAll=snap.docs.map(d=>{
+        const data=d.data();
+        const createdAt=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():new Date(data.createdAt);
+        return {...data,id:d.id,createdAt};
+      });
+      populateChatLogStationOptions();
+      filterChatLog();
+    },
+    e=>console.error('對話紀錄監聽失敗',e)
+  );
+}
+function populateChatLogStationOptions(){
+  const sel=document.getElementById('cl-station');
+  if(!sel||sel.dataset.filled)return;
+  CHAT_STATION_OPTIONS.forEach(s=>{
+    const opt=document.createElement('option');
+    opt.value=s.code;opt.textContent=s.name;
+    sel.appendChild(opt);
+  });
+  sel.dataset.filled='1';
+}
+function filterChatLog(){
+  const station=document.getElementById('cl-station').value;
+  const dateStart=document.getElementById('cl-date-start').value;
+  const dateEnd=document.getElementById('cl-date-end').value;
+  chatLogPage=1;
+  chatLogFiltered=chatLogAll.filter(m=>{
+    if(station){
+      const isAll=m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all'));
+      const matches=isAll||(Array.isArray(m.to)&&m.to.includes(station))||m.fromStation===station;
+      if(!matches)return false;
+    }
+    if(dateStart||dateEnd){
+      if(!m.createdAt)return false;
+      const y=m.createdAt.getFullYear(),mo=(m.createdAt.getMonth()+1).toString().padStart(2,'0'),da=m.createdAt.getDate().toString().padStart(2,'0');
+      const mDate=y+'-'+mo+'-'+da;
+      if(dateStart&&mDate<dateStart)return false;
+      if(dateEnd&&mDate>dateEnd)return false;
+    }
+    return true;
+  });
+  renderChatLog();
+}
+function resetChatLogFilter(){
+  document.getElementById('cl-station').value='';
+  document.getElementById('cl-date-start').value='';
+  document.getElementById('cl-date-end').value='';
+  filterChatLog();
+}
+function renderChatLog(){
+  const totalPages=Math.max(1,Math.ceil(chatLogFiltered.length/CHAT_LOG_PAGE_SIZE));
+  if(chatLogPage>totalPages)chatLogPage=totalPages;
+  if(chatLogPage<1)chatLogPage=1;
+  const startIdx=(chatLogPage-1)*CHAT_LOG_PAGE_SIZE;
+  const pageData=chatLogFiltered.slice(startIdx,startIdx+CHAT_LOG_PAGE_SIZE);
+  document.getElementById('chatlog-body').innerHTML=pageData.map(m=>{
+    const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全站廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
+    const readCount=Array.isArray(m.readBy)?m.readBy.length:0;
+    const total=getMsgTargetAccountCount(m);
+    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td><td style="font-size:11px">'+readCount+'/'+total+'</td></tr>';
+  }).join('');
+  document.getElementById('chatlog-count').textContent='共 '+chatLogFiltered.length+' 筆記錄'+(totalPages>1?'　第 '+chatLogPage+' / '+totalPages+' 頁':'');
+  renderChatLogPagination(totalPages);
+}
+function renderChatLogPagination(totalPages){
+  const w=document.getElementById('chatlog-pagination');
+  if(!w)return;
+  if(totalPages<=1){w.innerHTML='';return;}
+  let html='<button class="btn btn-sm" '+(chatLogPage<=1?'disabled':'')+' onclick="goChatLogPage('+(chatLogPage-1)+')"><i class="ti ti-chevron-left"></i></button>';
+  const pages=[];
+  for(let p=1;p<=totalPages;p++){
+    if(p===1||p===totalPages||Math.abs(p-chatLogPage)<=1)pages.push(p);
+    else if(pages[pages.length-1]!=='…')pages.push('…');
+  }
+  pages.forEach(p=>{
+    if(p==='…'){html+='<span style="padding:0 4px;color:var(--color-text-tertiary)">…</span>';}
+    else{html+='<button class="btn btn-sm" style="'+(p===chatLogPage?'background:#378ADD;color:#fff;border-color:#378ADD':'')+'" onclick="goChatLogPage('+p+')">'+p+'</button>';}
+  });
+  html+='<button class="btn btn-sm" '+(chatLogPage>=totalPages?'disabled':'')+' onclick="goChatLogPage('+(chatLogPage+1)+')"><i class="ti ti-chevron-right"></i></button>';
+  w.innerHTML=html;
+}
+function goChatLogPage(p){chatLogPage=p;renderChatLog();}
+
 let soundUnsubscribe=null;
 function loadSoundSettings(){
   if(!CU)return;
@@ -1448,7 +1810,7 @@ function loadSoundSettings(){
   soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
     if(snap.exists()){
       const d=snap.data();
-      ['warn','danger','success','notify'].forEach(k=>{
+      ['warn','danger','success','notify','chat'].forEach(k=>{
         if(d[k]){
           SC[k].current={type:d[k].type,id:d[k].id,name:d[k].name};
           SC[k].vol=typeof d[k].vol==='number'?d[k].vol:SC[k].vol;
@@ -1456,7 +1818,7 @@ function loadSoundSettings(){
       });
     }
     buildSound();
-    ['warn','danger','success','notify'].forEach(k=>{
+    ['warn','danger','success','notify','chat'].forEach(k=>{
       const el=document.getElementById('svol-'+k);
       const lb=document.getElementById('svol-lbl-'+k);
       if(el)el.value=SC[k].vol;
@@ -2406,26 +2768,29 @@ function getFilteredEvents(){
 Object.assign(window,{
   aInfo, addEventToDb, addHistoryToDb, addLog, applyNavRole, applyTT, askDeleteTT, autoDir,
   batchDeleteAcc, batchDeleteHistory, batchResetDevice, bindLoginEvents, bip, buildDangerUtter, buildEventFilter, buildNote,
-  buildSound, calKey, calNextMonth, calPrevMonth, calcDir, cdCls, clearAccSelection, clearHistSelection,
-  clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeFormModal, closeMobileMenu, closeSoundReplace, confirmDeleteTT,
-  confirmSoundReplace, csvEscape, delEvent, deleteAcc, deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb,
-  deleteTTFromDb, doCalImport, doLogin, doLogout, downloadCsv, executeRestore, executeSuspend, exportCustomReport,
-  exportLog, exportMonthReport, filterLog, finishFail, finishOk, fmt, fmtCd, ga,
-  getArrivalTime, getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents, getNextN, getSelectedAccIds,
-  getTodayTTName, getTodayTTType, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents,
-  isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadHistory, loadLogs, loadSoundSettings, loadSuspendStatus,
-  loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onLogMonthChange,
-  onSReasonChange, onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openEditModal, openEditTT,
-  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
-  playCS, playCurrentSoundCS, playSoundPreview, populateLogMonthOptions, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
-  renderEvents, renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner,
-  renderTTTable, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit,
-  saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset,
-  setEventFilter, setSFilter, showAlertCard, showPage, showToast, speakArrivalNotice, speakArrivalNoticeVol, speakDangerForCard,
-  speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
-  submitFail, submitNewTT, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleLoginEye, togglePwd,
-  ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd,
-  updateSoundVol, updateTrains, uploadLogo
+  buildSound, calKey, calNextMonth, calPrevMonth, calcDir, canSeeChatMsg, cdCls, clearAccSelection,
+  clearHistSelection, clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeFormModal, closeMobileMenu,
+  closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc, deleteAccFromDb,
+  deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout, downloadCsv,
+  esc, executeRestore, executeSuspend, exportCustomReport, exportLog, exportMonthReport, filterChatLog, filterLog,
+  finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime, getCalEntry, getCurrentTimetable,
+  getDefaultStation, getDefaultToStation, getFilteredEvents, getMsgTargetAccountCount, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType,
+  goChatLogPage, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji,
+  isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory, loadLogs,
+  loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, markChatMessagesRead, needsDropdownFilter,
+  nowStr, nowStr2, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange, openAccEdit, openAccModal,
+  openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT, openFilePreview, openHistoryEdit, openMobileMenu,
+  openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS, playCurrentSoundCS, playSoundPreview,
+  populateChatLogStationOptions, populateLogMonthOptions, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogPagination,
+  renderChatMessages, renderEvents, renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay,
+  renderTTBanner, renderTTTable, resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb,
+  saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv,
+  selCalType, selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast,
+  speakArrivalNotice, speakArrivalNoticeVol, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener,
+  startLock, stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, tick, todayStrTT,
+  toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar,
+  updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains,
+  uploadLogo
 });
 
 
