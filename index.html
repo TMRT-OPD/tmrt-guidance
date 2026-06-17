@@ -1531,14 +1531,19 @@ function refreshSoundCurrent(k){
   const isVoice=SC[k].current.type==='voice';
   if(t){t.textContent=isCustom?'自訂':isVoice?'語音':'內建';t.style.background=isCustom?'#EEEDFE':isVoice?'#e6f1fb':'#EAF3DE';t.style.color=isCustom?'#3C3489':isVoice?'#0c447c':'#3B6D11';}
 }
-function resetSoundCS(k){SC[k].current={...SOUND_DEFAULTS[k]};if(k!=='notify')refreshSoundCurrent(k);else buildSound();showToast('已恢復預設音效');}
+async function resetSoundCS(k){
+  SC[k].current={...SOUND_DEFAULTS[k]};
+  if(k!=='notify')refreshSoundCurrent(k);else buildSound();
+  await saveAllSound(true);
+  showToast('已恢復預設音效　（已自動儲存）');
+}
 function updateSoundVol(k,val){
   SC[k].vol=parseInt(val);
   const lb=document.getElementById('svol-lbl-'+k);
   if(lb)lb.textContent=val+'%';
 }
 
-async function saveAllSound(){
+async function saveAllSound(silent){
   if(!CU)return;
   const data={
     warn: {id:SC.warn.current.id,type:SC.warn.current.type,name:SC.warn.current.name,vol:SC.warn.vol},
@@ -1552,7 +1557,7 @@ async function saveAllSound(){
   try{
     await setDoc(doc(db,'soundSettings','global'),data);
     addLog('edit','更新全域音效設定');
-    showToast('音效設定已儲存，全系統同步生效');
+    if(!silent)showToast('音效設定已儲存，全系統同步生效');
   }catch(e){showToast('儲存失敗：'+e.message);}
 }
 
@@ -1957,6 +1962,7 @@ function handleSoundUpload(input){
 }
 async function confirmSoundReplace(){
   if(!soundReplaceKey)return;
+  let isCustomUpload=false;
   if(soundReplaceFile){
     /* 解碼音訊檔案存入 SC._audioBuffer */
     try{
@@ -1965,14 +1971,16 @@ async function confirmSoundReplace(){
       SC[soundReplaceKey]._audioBuffer=await ctx.decodeAudioData(ab);
     }catch(e){console.error('音訊解碼失敗',e);}
     SC[soundReplaceKey].current={type:'custom',name:soundReplaceFile.name,id:null};
-    showToast('已替換為自訂音效：'+soundReplaceFile.name);
+    isCustomUpload=true;
   } else if(soundReplaceSel){
     const p=(PRESETS[soundReplaceKey]||[]).find(x=>x.id===soundReplaceSel);
     if(p)SC[soundReplaceKey].current={type:'preset',id:p.id,name:p.name};
-    showToast('已替換為：'+(SC[soundReplaceKey].current.name||''));
   } else {showToast('請選擇音效或上傳檔案');return;}
   refreshSoundCurrent(soundReplaceKey);
   closeSoundReplace();
+  /* 自動儲存到 Firebase，避免忘記按「儲存設定」導致改動消失 */
+  await saveAllSound(true);
+  showToast((isCustomUpload?'已替換為自訂音效：'+SC[soundReplaceKey].current.name:'已替換為：'+SC[soundReplaceKey].current.name)+'　（已自動儲存）');
 }
 
 /* ── 事件系統 ── */
