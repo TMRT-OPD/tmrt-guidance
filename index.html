@@ -299,6 +299,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <div class="nav-section">主要功能</div>
     <div class="nav-item active" data-page="events" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-users"></i>即時引導事件</div>
     <div class="nav-item" data-page="history" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-history"></i>歷史查詢</div>
+    <div class="nav-item" data-page="guide" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-info-circle"></i>系統操作說明</div>
     <div class="nav-section" data-min-role="A" style="display:none">管理</div>
     <div class="nav-item" data-page="timetable" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-calendar"></i>時刻表版次</div>
     <div class="nav-item" data-page="calendar" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-calendar-event"></i>行事曆管理</div>
@@ -339,6 +340,32 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <th style="width:32px"><input type="checkbox" id="hist-chk-all" onclick="toggleAllHist(this)" style="cursor:pointer" title="全選"></th>
     <th>時間</th><th>路線</th><th>類別</th><th>車組</th><th>狀態</th><th>建立者</th><th>備註</th><th>操作</th>
   </tr></thead><tbody id="history-body"></tbody></table></div>
+</div>
+
+<!-- 系統操作說明 -->
+<div class="page" id="page-guide">
+  <div class="topbar"><div class="topbar-title">系統操作說明</div></div>
+  <div class="card card-pad" style="max-width:760px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-info-circle" style="color:#378ADD"></i>本系統使用須知</div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:12px">
+        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">1</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統因應號誌資安考量，未與行控中心 ATS 系統串接，所有班次資訊均參照行控中心公告之發車時刻表進行計算與顯示。</div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">2</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">遇交通尖峰時段、列車臨時延靠等狀況，實際發車時間可能與系統顯示時間產生誤差，請提前至月台就定位，以免錯過列車。</div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">3</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">如遇地震、強風、颱風、系統或設備異常等突發事件，本系統將暫停使用，請依現場廣播及行控中心指示處理。</div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">4</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統僅作為站務人員執行旅客引導作業之輔助工具，所有引導決策與現場應變仍應以實際情況及行控中心指示為準。</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 時刻表 -->
@@ -575,7 +602,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
   <div class="modal-body">
     <div class="info-block"><div>暫停期間：<strong>禁止新增事件</strong></div><div>進行中任務：<strong>不受影響，直至倒數完畢 + 結案</strong></div><div>恢復後時刻表：<strong>自動判斷，如有錯誤可手動修正</strong></div></div>
     <div class="form-group"><div class="form-label">暫停原因 <span>*</span></div>
-      <select id="s-reason" onchange="onSReasonChange()"><option value="">請選擇原因</option><option value="颱風天班距異常">颱風天班距異常</option><option value="列車異常">列車異常</option><option value="ATS 系統異常">ATS 系統異常</option><option value="班距版次錯誤">班距版次錯誤</option><option value="other">其他</option></select>
+      <select id="s-reason" onchange="onSReasonChange()"><option value="">請選擇原因</option><option value="地震因素">地震因素</option><option value="強風因素">強風因素</option><option value="颱風因素">颱風因素</option><option value="電力因素">電力因素</option><option value="號誌因素">號誌因素</option><option value="列車因素">列車因素</option><option value="緊急異常事件">緊急異常事件</option><option value="本引導系統異常">本引導系統異常</option><option value="other">其他</option></select>
       <div class="err-msg" id="s-reason-err"></div>
     </div>
     <div class="form-group" id="s-other-wrap" style="display:none"><div class="form-label">請說明原因 <span>*</span></div><textarea id="s-other" placeholder="請輸入暫停原因..."></textarea><div class="err-msg" id="s-other-err"></div></div>
@@ -785,9 +812,11 @@ function renderAccounts(){
       <td style="font-size:11px">${u.ip?'<span style="font-family:var(--font-mono)">'+ u.ip +'</span>':'<span style="color:var(--color-text-tertiary)">不限制</span>'}</td>
       <td><span class="badge ${u.status==='啟用'?'badge-green':'badge-gray'}">${u.status}</span></td>
       <td style="white-space:nowrap">
-        <button class="btn btn-sm" onclick="openAccEdit('${u.id}')"><i class="ti ti-edit"></i></button>
-        ${u.role!=='S'?`<button class="btn btn-sm" style="color:#E8861A;border-color:#E8861A;margin-left:3px" onclick="resetDevice('${u.id}')" title="重置裝置綁定"><i class="ti ti-device-mobile-off"></i></button>`:''}
-        <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A;margin-left:3px" onclick="deleteAcc('${u.id}')"><i class="ti ti-trash"></i></button>
+        <div style="display:flex;gap:3px;width:96px">
+          <button class="btn btn-sm" onclick="openAccEdit('${u.id}')"><i class="ti ti-edit"></i></button>
+          ${u.role!=='S'?`<button class="btn btn-sm" style="color:#E8861A;border-color:#E8861A" onclick="resetDevice('${u.id}')" title="重置裝置綁定"><i class="ti ti-device-mobile-off"></i></button>`:'<span style="width:30px"></span>'}
+          <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" onclick="deleteAcc('${u.id}')"><i class="ti ti-trash"></i></button>
+        </div>
       </td>
     </tr>`).join('');
   /* 更新批次操作列 */
