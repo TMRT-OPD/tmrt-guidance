@@ -249,13 +249,13 @@ input[type=range]{flex:1;accent-color:#378ADD}
 .chat-input-row{display:flex;gap:6px;align-items:center}
 .chat-input-row input{flex:1;font-size:13px;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary)}
 .chat-emoji-btn{flex-shrink:0}
-.emoji-picker{position:fixed;left:16px;height:220px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
+.emoji-picker{position:fixed;height:320px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
 .emoji-tabs{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);padding:0 10px;flex-shrink:0}
 .emoji-tab-btn{font-size:13px;padding:10px 16px;border:none;background:none;cursor:pointer;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0}
 .emoji-tab-btn.active{color:#378ADD;font-weight:600;background:var(--color-background-primary);border-bottom:2px solid #378ADD;margin-bottom:-1px}
-.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px;padding:14px;flex:1;overflow-y:auto;align-content:flex-start}
-.emoji-grid span{cursor:pointer;font-size:13px;padding:8px 3px;border-radius:6px;text-align:center;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.emoji-grid.emoji-tab-emoji span{font-size:21px;padding:7px 3px}
+.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;padding:18px;flex:1;overflow-y:auto;align-content:flex-start}
+.emoji-grid span{cursor:pointer;font-size:14px;padding:10px 4px;border-radius:8px;text-align:center;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.emoji-grid.emoji-tab-emoji span{font-size:30px;padding:10px 4px}
 .emoji-grid span:hover{background:var(--color-background-secondary)}
 .chat-station-chk{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--border-radius-md);cursor:pointer;font-size:12px}
 .chat-station-chk:hover{background:var(--color-background-secondary)}
@@ -1707,25 +1707,35 @@ function toggleChatWall(){
     wall.style.height=newH+'px';
     /* 拖動時若表情符號面板已開啟，同步更新位置 */
     const p=document.getElementById('emoji-picker');
-    if(p&&p.style.display!=='none'){
-      const rect=wall.getBoundingClientRect();
-      p.style.right=(window.innerWidth-rect.right)+'px';
-      p.style.bottom=(window.innerHeight-rect.top+8)+'px';
-    }
+    if(p&&p.style.display!=='none')positionEmojiPicker();
   });
   document.addEventListener('mouseup',()=>{resizing=false;});
 })();
 
 let emojiPickerOutsideBound=false;
-function toggleEmojiPicker(){
+function getEmojiPickerLeftBound(){
+  /* 主內容區（.main）的左邊界，避免蓋住側邊欄 */
+  const main=document.querySelector('.main');
+  if(main){
+    const r=main.getBoundingClientRect();
+    return r.left+16;
+  }
+  return 216;
+}
+function positionEmojiPicker(){
   const p=document.getElementById('emoji-picker');
   const wall=document.getElementById('chat-wall');
   if(!p||!wall)return;
+  const rect=wall.getBoundingClientRect();
+  p.style.left=getEmojiPickerLeftBound()+'px';
+  p.style.right=(window.innerWidth-rect.right)+'px';
+  p.style.bottom=(window.innerHeight-rect.top+8)+'px';
+}
+function toggleEmojiPicker(){
+  const p=document.getElementById('emoji-picker');
+  if(!p)return;
   if(p.style.display==='none'){
-    /* 動態定位：右邊界對齊對話牆，往上接在對話牆正上方 */
-    const rect=wall.getBoundingClientRect();
-    p.style.right=(window.innerWidth-rect.right)+'px';
-    p.style.bottom=(window.innerHeight-rect.top+8)+'px';
+    positionEmojiPicker();
     renderEmojiPicker();
     p.style.display='flex';
     if(!emojiPickerOutsideBound){
@@ -2918,23 +2928,24 @@ Object.assign(window,{
   deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
   downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
   filterChatLog, filterLog, finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime,
-  getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents, getNextN, getSelectedAccIds, getTodayTTName,
-  getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents,
-  insertEmoji, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory,
-  loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect,
-  needsDropdownFilter, nowStr, nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange,
-  openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT, openFilePreview,
-  openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS,
-  playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
-  renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents, renderHistory, renderLog,
-  renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, resetChatLogFilter, resetDevice,
-  resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit,
-  saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, sendChatMessage, setEventFilter,
-  setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol, speakChatNotice,
-  speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT,
-  submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist,
-  toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2,
-  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents, getNextN, getSelectedAccIds,
+  getTodayTTName, getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload,
+  initTTTableEvents, insertEmoji, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages,
+  loadHistory, loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess,
+  makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange,
+  onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT,
+  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
+  playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts,
+  renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents,
+  renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable,
+  resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit,
+  saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset,
+  sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice,
+  speakArrivalNoticeVol, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock,
+  stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT,
+  toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar,
+  updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains,
+  uploadLogo
 });
 
 
