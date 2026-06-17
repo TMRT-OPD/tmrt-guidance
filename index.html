@@ -227,7 +227,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 }
 
 /* ── 對話牆 ── */
-.chat-wall{position:fixed;right:16px;bottom:16px;width:25vw;min-width:300px;height:33vh;min-height:280px;max-width:90vw;max-height:90vh;border:2px solid red;border-radius:var(--border-radius-lg);background:rgba(255,0,0,0.3);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+.chat-wall{position:fixed;right:16px;bottom:16px;width:25vw;min-width:300px;height:33vh;min-height:280px;max-width:90vw;max-height:90vh;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);background:rgba(255,255,255,0.75);backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 4px 24px rgba(0,0,0,.25)}
 @media (prefers-color-scheme:dark){.chat-wall{background:rgba(30,30,30,0.85)}}
 .chat-wall.collapsed{height:auto!important}
 .chat-wall-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:rgba(0,0,0,0.06);flex-shrink:0;cursor:default}
@@ -1738,12 +1738,16 @@ function positionEmojiPicker(){
   if(!p||!wall)return;
   const rect=wall.getBoundingClientRect();
   const pickerHeight=320;
-  /* bottom 不可超過「視窗高度 - 面板自身高度 - 留一點邊界」，避免被拖大的對話牆推出視窗範圍 */
+  const leftBound=getEmojiPickerLeftBound();
+  /* 只用 left+width 定位，不混用 right，避免 left/right 衝突造成寬度計算錯誤 */
+  const width=Math.max(280,window.innerWidth-leftBound-16);
   const maxBottom=window.innerHeight-pickerHeight-20;
   let bottom=window.innerHeight-rect.top+8;
   if(bottom>maxBottom)bottom=Math.max(20,maxBottom);
-  p.style.left=getEmojiPickerLeftBound()+'px';
-  p.style.right=(window.innerWidth-rect.right)+'px';
+  if(bottom<20)bottom=20;
+  p.style.left=leftBound+'px';
+  p.style.right='auto';
+  p.style.width=width+'px';
   p.style.bottom=bottom+'px';
 }
 function toggleEmojiPicker(){
