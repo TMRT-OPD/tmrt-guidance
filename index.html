@@ -1679,11 +1679,20 @@ function renderChatMessages(){
 
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
 
+let chatWallSavedHeight=null;
 function toggleChatWall(){
   chatWallCollapsed=!chatWallCollapsed;
   const wall=document.getElementById('chat-wall');
   const btn=document.getElementById('chat-toggle-btn');
-  if(wall)wall.classList.toggle('collapsed',chatWallCollapsed);
+  if(wall){
+    if(chatWallCollapsed){
+      chatWallSavedHeight=wall.style.height||'';
+      wall.style.height='';
+    } else {
+      wall.style.height=chatWallSavedHeight||'';
+    }
+    wall.classList.toggle('collapsed',chatWallCollapsed);
+  }
   if(btn)btn.innerHTML='<i class="ti ti-chevron-'+(chatWallCollapsed?'up':'down')+'"></i>';
 }
 
