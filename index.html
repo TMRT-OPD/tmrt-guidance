@@ -1671,24 +1671,27 @@ function toggleChatWall(){
   if(btn)btn.innerHTML='<i class="ti ti-chevron-'+(chatWallCollapsed?'up':'down')+'"></i>';
 }
 
+let emojiPickerOutsideBound=false;
 function toggleEmojiPicker(){
   const p=document.getElementById('emoji-picker');
   if(!p)return;
   if(p.style.display==='none'){
     renderEmojiPicker();
     p.style.display='block';
-    setTimeout(()=>document.addEventListener('click',closeEmojiPickerOutside),0);
+    if(!emojiPickerOutsideBound){
+      document.addEventListener('mousedown',closeEmojiPickerOutside);
+      emojiPickerOutsideBound=true;
+    }
   } else {
     p.style.display='none';
-    document.removeEventListener('click',closeEmojiPickerOutside);
   }
 }
 function closeEmojiPickerOutside(e){
   const p=document.getElementById('emoji-picker');
   const btn=document.querySelector('.chat-emoji-btn');
-  if(!p||p.contains(e.target)||(btn&&btn.contains(e.target)))return;
+  if(!p||p.style.display==='none')return;
+  if(p.contains(e.target)||(btn&&btn.contains(e.target)))return;
   p.style.display='none';
-  document.removeEventListener('click',closeEmojiPickerOutside);
 }
 function renderEmojiPicker(){
   const p=document.getElementById('emoji-picker');
