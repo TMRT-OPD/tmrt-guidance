@@ -1343,7 +1343,7 @@ function buildSound(){
         <div style="display:flex;align-items:center;gap:8px">
           <i class="${s.k==='notify'?'ti ti-speakerphone':'ti ti-music'}" style="font-size:14px;color:var(--color-text-tertiary)"></i>
           <span style="font-size:12px;font-weight:500;color:var(--color-text-primary)" id="scur-name-${s.k}">${SC[s.k].current.name}</span>
-          <span style="font-size:10px;padding:1px 6px;border-radius:var(--border-radius-md);background:${s.k==='notify'?'#e6f1fb':SC[s.k].current.type==='custom'?'#EEEDFE':'#EAF3DE'};color:${s.k==='notify'?'#0c447c':SC[s.k].current.type==='custom'?'#3C3489':'#3B6D11'};font-weight:500" id="scur-tag-${s.k}">${s.k==='notify'?'語音':'內建'}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:var(--border-radius-md);background:${SC[s.k].current.type==='voice'?'#e6f1fb':SC[s.k].current.type==='custom'?'#EEEDFE':'#EAF3DE'};color:${SC[s.k].current.type==='voice'?'#0c447c':SC[s.k].current.type==='custom'?'#3C3489':'#3B6D11'};font-weight:500" id="scur-tag-${s.k}">${SC[s.k].current.type==='voice'?'語音':SC[s.k].current.type==='custom'?'自訂':'內建'}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <button class="btn btn-sm" onclick="playCurrentSoundCS('${s.k}')"><i class="ti ti-volume"></i> 試聽</button>
