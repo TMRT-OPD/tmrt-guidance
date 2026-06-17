@@ -227,39 +227,43 @@ input[type=range]{flex:1;accent-color:#378ADD}
 }
 
 /* ── 對話牆 ── */
-.chat-wall{position:fixed;left:200px;right:0;bottom:0;height:33vh;border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
-.chat-wall.collapsed{height:auto}
-.chat-wall-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);flex-shrink:0}
+.chat-wall{position:fixed;right:16px;bottom:16px;width:25vw;min-width:300px;height:33vh;min-height:280px;max-width:90vw;max-height:90vh;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);background:var(--color-background-primary);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+.chat-wall.collapsed{height:auto!important}
+.chat-wall-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);flex-shrink:0;cursor:default}
 .chat-wall-body{display:flex;flex-direction:column;flex:1;min-height:0}
 .chat-wall.collapsed .chat-wall-body{display:none}
-#page-events{padding-bottom:33vh}
+.chat-resize-handle{position:absolute;top:0;left:0;width:14px;height:14px;cursor:nwse-resize;z-index:5}
+.chat-resize-handle::after{content:'';position:absolute;top:4px;left:4px;width:7px;height:7px;border-top:2px solid var(--color-border-secondary);border-left:2px solid var(--color-border-secondary)}
+#page-events{padding-bottom:24px}
 .chat-messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.chat-msg{max-width:78%;padding:8px 12px;border-radius:var(--border-radius-lg);font-size:12.5px;line-height:1.5;position:relative}
-.chat-msg.mine{align-self:flex-end;background:#378ADD;color:#fff;border-radius:var(--border-radius-lg) var(--border-radius-lg) 4px var(--border-radius-lg)}
+.chat-msg-header{font-size:10px;color:var(--color-text-tertiary);margin:6px 2px 2px;max-width:62%}
+.chat-msg-header.mine{align-self:flex-end;text-align:right}
+.chat-msg-header.theirs{align-self:flex-start}
+.chat-msg{max-width:62%;padding:6px 10px;border-radius:var(--border-radius-lg);font-size:12.5px;line-height:1.5;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.chat-msg.mine{align-self:flex-end;background:#d9fdd3;color:#08543a;border-radius:var(--border-radius-lg) var(--border-radius-lg) 4px var(--border-radius-lg)}
 .chat-msg.theirs{align-self:flex-start;background:var(--color-background-secondary);color:var(--color-text-primary);border-radius:var(--border-radius-lg) var(--border-radius-lg) var(--border-radius-lg) 4px}
-.chat-msg-meta{font-size:10px;opacity:0.7;margin-bottom:3px;display:flex;gap:6px;align-items:center}
-.chat-msg-target{font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,255,255,0.25)}
-.chat-msg.theirs .chat-msg-target{background:#e6f1fb;color:#0c447c}
-.chat-msg-read{font-size:9px;opacity:0.75;margin-top:3px;text-align:right}
+.chat-msg-text{word-break:break-word}
+.chat-msg-time{font-size:9px;opacity:0.65;flex-shrink:0;margin-left:auto}
 .chat-input-area{border-top:0.5px solid var(--color-border-tertiary);padding:10px 12px;background:var(--color-background-secondary);position:relative;flex-shrink:0}
 .chat-target-display{display:flex;align-items:center;gap:6px;font-size:11px;color:#0c447c;cursor:pointer;margin-bottom:8px;padding:4px 8px;background:#e6f1fb;border-radius:var(--border-radius-md);width:fit-content}
 .chat-input-row{display:flex;gap:6px;align-items:center}
 .chat-input-row input{flex:1;font-size:13px;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary)}
 .chat-emoji-btn{flex-shrink:0}
-.emoji-picker{position:fixed;left:212px;right:12px;top:20px;bottom:calc(33vh + 56px);background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:100;display:flex;flex-direction:column}
-.emoji-tabs{display:flex;gap:2px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);padding:0 6px;flex-shrink:0}
-.emoji-tab-btn{font-size:12px;padding:8px 14px;border:none;background:none;cursor:pointer;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0}
+.emoji-picker{position:fixed;left:16px;height:220px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
+.emoji-tabs{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);padding:0 10px;flex-shrink:0}
+.emoji-tab-btn{font-size:13px;padding:10px 16px;border:none;background:none;cursor:pointer;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0}
 .emoji-tab-btn.active{color:#378ADD;font-weight:600;background:var(--color-background-primary);border-bottom:2px solid #378ADD;margin-bottom:-1px}
-.emoji-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;padding:12px;flex:1;overflow-y:auto;align-content:flex-start}
-.emoji-grid span{cursor:pointer;font-size:12px;padding:10px 3px;border-radius:6px;text-align:center;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.emoji-grid.emoji-tab-emoji span{font-size:22px;padding:8px 3px}
+.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px;padding:14px;flex:1;overflow-y:auto;align-content:flex-start}
+.emoji-grid span{cursor:pointer;font-size:13px;padding:8px 3px;border-radius:6px;text-align:center;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.emoji-grid.emoji-tab-emoji span{font-size:21px;padding:7px 3px}
 .emoji-grid span:hover{background:var(--color-background-secondary)}
 .chat-station-chk{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--border-radius-md);cursor:pointer;font-size:12px}
 .chat-station-chk:hover{background:var(--color-background-secondary)}
 @media (max-width:768px){
   .chat-wall{left:0}
-  .chat-msg{max-width:88%}
-  .emoji-picker{left:12px}
+  .chat-msg{max-width:78%}
+  .chat-msg-header{max-width:78%}
+
 }
 </style>
 </head>
@@ -364,6 +368,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 
   <!-- 對話牆 -->
   <div class="chat-wall" id="chat-wall">
+    <div class="chat-resize-handle" id="chat-resize-handle"></div>
     <div class="chat-wall-header">
       <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-messages" style="font-size:16px;color:#378ADD"></i><span style="font-size:13px;font-weight:600">站務對話牆</span><span style="font-size:11px;color:var(--color-text-tertiary)" id="chat-msg-count"></span></div>
       <button class="btn btn-sm" onclick="toggleChatWall()" id="chat-toggle-btn"><i class="ti ti-chevron-down"></i></button>
@@ -569,20 +574,21 @@ input[type=range]{flex:1;accent-color:#378ADD}
 
 <!-- 對話紀錄（S級管理頁） -->
 <div class="page" id="page-chatlog">
-  <div class="topbar"><div class="topbar-title">對話紀錄</div></div>
+  <div class="topbar"><div class="topbar-title">對話紀錄</div><button class="btn" onclick="exportChatLog()"><i class="ti ti-download"></i>匯出 Excel</button></div>
   <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
     <select id="cl-station" onchange="filterChatLog()"><option value="">全部站別／單位</option></select>
-    <select id="cl-month" onchange="onChatLogMonthChange()" style="min-width:130px"><option value="">月份快速選擇</option></select>
-    <input type="date" id="cl-date-start" onchange="document.getElementById('cl-month').value='';filterChatLog()" style="font-size:12px">
+    <input type="date" id="cl-date-quick" onchange="onChatLogDateQuickChange()" style="font-size:12px" title="日期快速選擇">
+    <input type="date" id="cl-date-start" onchange="document.getElementById('cl-date-quick').value='';filterChatLog()" style="font-size:12px">
     <span style="font-size:12px;color:var(--color-text-tertiary)">至</span>
-    <input type="date" id="cl-date-end" onchange="document.getElementById('cl-month').value='';filterChatLog()" style="font-size:12px">
+    <input type="date" id="cl-date-end" onchange="document.getElementById('cl-date-quick').value='';filterChatLog()" style="font-size:12px">
     <button class="btn btn-sm" onclick="resetChatLogFilter()"><i class="ti ti-refresh"></i> 重置篩選</button>
   </div>
-  <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th><th>已讀</th></tr></thead><tbody id="chatlog-body"></tbody></table></div>
+  <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th></tr></thead><tbody id="chatlog-body"></tbody></table></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
     <div style="font-size:11px;color:var(--color-text-tertiary)" id="chatlog-count"></div>
     <div style="display:flex;gap:6px;align-items:center" id="chatlog-pagination"></div>
   </div>
+  <div style="text-align:center;margin-top:10px" id="chatlog-loadmore-wrap"></div>
 </div>
 
 </div>
@@ -746,7 +752,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <script type="module">
 /* ── Firebase 初始化 ── */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAZhpwsD_z18qRUdYchFCTT4HB7VWcpQQI",
@@ -892,7 +898,7 @@ function loginSuccess(prevLogin,prevIp){
   /* 存 session 供重整恢復 */
   sessionStorage.setItem('tmrt_session_user', CU.username);
   sessionStorage.setItem('tmrt_session_dt', localStorage.getItem('tmrt_dt_'+CU.username)||'');
-  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadTTMode();loadSoundSettings();loadTTVersions();loadCalOvr();loadChatMessages();if(CU.role==='S')loadChatLogAll();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
+  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadTTMode();loadSoundSettings();loadTTVersions();loadCalOvr();loadChatMessages();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
   /* B 級預設：本站（到站）；S/A 級：全線 */
   eventFilter=CU.role==='B'?'arrive':(CU.role==='S'?'all':'arrive');
   eventFilterStation='all';
@@ -910,8 +916,9 @@ function doLogout(){if(confirm('確定登出？')){
   if(typeof suspendUnsubscribe==='function'){suspendUnsubscribe();suspendUnsubscribe=null;}
   if(typeof ttModeUnsubscribe==='function'){ttModeUnsubscribe();ttModeUnsubscribe=null;}
   if(typeof chatUnsubscribe==='function'){chatUnsubscribe();chatUnsubscribe=null;}
-  if(typeof chatLogUnsubscribe==='function'){chatLogUnsubscribe();chatLogUnsubscribe=null;}
-  chatMessages=[];chatKnownIds=new Set();chatInitialized=false;chatLogAll=[];chatLogFiltered=[];
+  chatMessages=[];chatKnownIds=new Set();chatInitialized=false;
+  chatLogAll=[];chatLogFiltered=[];chatLogLastDoc=null;chatLogHasMore=true;chatLogLoaded=false;
+  const clSel=document.getElementById('cl-station');if(clSel)clSel.dataset.filled='';
   if(typeof eventsUnsubscribe==='function'){eventsUnsubscribe();eventsUnsubscribe=null;}
   if(typeof ttUnsubscribe==='function'){ttUnsubscribe();ttUnsubscribe=null;}
   if(typeof calUnsubscribe==='function'){calUnsubscribe();calUnsubscribe=null;}
@@ -928,10 +935,23 @@ function uploadLogo(input){
 }
 
 /* ── 帳號管理 ── */
+function sortedAccountsList(){
+  const roleOrder={S:0,A:1,B:2};
+  const stationNum=st=>{
+    const m=String(st||'').match(/G(\d+)/);
+    if(m)return parseInt(m[1]);
+    return 9999;/* 北段辦/南段辦等非車站排最後 */
+  };
+  return [...ACCOUNTS].sort((a,b)=>{
+    const r=(roleOrder[a.role]??9)-(roleOrder[b.role]??9);
+    if(r!==0)return r;
+    return stationNum(a.station)-stationNum(b.station);
+  });
+}
 function renderAccounts(){
   const rb={S:'badge-purple',A:'badge-blue',B:'badge-gray'};
   const tbody=document.getElementById('accounts-body');if(!tbody)return;
-  tbody.innerHTML=ACCOUNTS.map(u=>`
+  tbody.innerHTML=sortedAccountsList().map(u=>`
     <tr>
       <td style="width:32px"><input type="checkbox" class="acc-chk" data-id="${u.id}" data-role="${u.role}" style="cursor:pointer" onclick="updateAccBatchBar()"></td>
       <td style="font-weight:500">${u.username}</td>
@@ -1635,47 +1655,28 @@ function renderChatMessages(){
   if(!w)return;
   const cnt=document.getElementById('chat-msg-count');
   if(cnt)cnt.textContent=chatMessages.length?'（最近 '+chatMessages.length+' 筆）':'';
-  w.innerHTML=chatMessages.map(m=>{
+  let html='';
+  let lastFrom=null,lastTarget=null;
+  chatMessages.forEach(m=>{
     const mine=m.from===CU.username;
-    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全站':(Array.isArray(m.to)?m.to.join('、'):'');
-    const readCount=Array.isArray(m.readBy)?m.readBy.length:0;
-    const totalTargets=getMsgTargetAccountCount(m);
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?'發送給：'+m.to.join('、'):'');
+    const targetKey=m.from+'|'+targetLabel;
+    const showHeader=targetKey!==lastTarget;
     const timeStr=m.createdAt?(m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'';
-    return '<div class="chat-msg '+(mine?'mine':'theirs')+'" data-id="'+m.id+'">'+
-      '<div class="chat-msg-meta">'+(mine?'':'<strong>'+esc(m.fromName||m.from)+'</strong>')+'<span class="chat-msg-target">'+esc(targetLabel)+'</span><span>'+timeStr+'</span></div>'+
-      '<div>'+esc(m.content)+'</div>'+
-      (mine?'<div class="chat-msg-read">已讀 '+readCount+'/'+totalTargets+'</div>':'')+
+    if(showHeader){
+      html+='<div class="chat-msg-header '+(mine?'mine':'theirs')+'">'+(mine?'':'<strong>'+esc(m.fromName||m.from)+'</strong>　')+esc(targetLabel)+'</div>';
+    }
+    html+='<div class="chat-msg '+(mine?'mine':'theirs')+'" data-id="'+m.id+'">'+
+      '<span class="chat-msg-text">'+esc(m.content)+'</span>'+
+      '<span class="chat-msg-time">'+timeStr+'</span>'+
       '</div>';
-  }).join('');
+    lastTarget=targetKey;
+  });
+  w.innerHTML=html;
   w.scrollTop=w.scrollHeight;
-  /* 標記目前帳號已讀所有可見訊息 */
-  markChatMessagesRead();
 }
 
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-
-/* 估算訊息的目標帳號數，用於已讀計算的分母 */
-function getMsgTargetAccountCount(m){
-  if(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all'))){
-    return Math.max(1,ACCOUNTS.length-1);/* 排除發送者自己 */
-  }
-  if(Array.isArray(m.to)){
-    const count=ACCOUNTS.filter(a=>m.to.includes(a.station)&&a.username!==m.from).length;
-    return Math.max(1,count);
-  }
-  return 1;
-}
-
-async function markChatMessagesRead(){
-  if(!CU)return;
-  for(const m of chatMessages){
-    if(m.from===CU.username)continue;
-    if(Array.isArray(m.readBy)&&m.readBy.includes(CU.username))continue;
-    try{
-      await updateDoc(doc(db,'chatMessages',m.id),{readBy:arrayUnion(CU.username)});
-    }catch(e){/* 忽略單筆已讀更新失敗 */}
-  }
-}
 
 function toggleChatWall(){
   chatWallCollapsed=!chatWallCollapsed;
@@ -1685,13 +1686,48 @@ function toggleChatWall(){
   if(btn)btn.innerHTML='<i class="ti ti-chevron-'+(chatWallCollapsed?'up':'down')+'"></i>';
 }
 
+/* 拖動左上角把手調整對話牆寬高（貼右下角，拖動把手往左上拉=放大）*/
+(function initChatResize(){
+  const handle=document.getElementById('chat-resize-handle');
+  const wall=document.getElementById('chat-wall');
+  if(!handle||!wall)return;
+  let resizing=false,startX=0,startY=0,startW=0,startH=0;
+  handle.addEventListener('mousedown',e=>{
+    resizing=true;startX=e.clientX;startY=e.clientY;
+    const rect=wall.getBoundingClientRect();
+    startW=rect.width;startH=rect.height;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!resizing)return;
+    const dx=startX-e.clientX,dy=startY-e.clientY;
+    const newW=Math.min(Math.max(startW+dx,300),window.innerWidth*0.9);
+    const newH=Math.min(Math.max(startH+dy,280),window.innerHeight*0.9);
+    wall.style.width=newW+'px';
+    wall.style.height=newH+'px';
+    /* 拖動時若表情符號面板已開啟，同步更新位置 */
+    const p=document.getElementById('emoji-picker');
+    if(p&&p.style.display!=='none'){
+      const rect=wall.getBoundingClientRect();
+      p.style.right=(window.innerWidth-rect.right)+'px';
+      p.style.bottom=(window.innerHeight-rect.top+8)+'px';
+    }
+  });
+  document.addEventListener('mouseup',()=>{resizing=false;});
+})();
+
 let emojiPickerOutsideBound=false;
 function toggleEmojiPicker(){
   const p=document.getElementById('emoji-picker');
-  if(!p)return;
+  const wall=document.getElementById('chat-wall');
+  if(!p||!wall)return;
   if(p.style.display==='none'){
+    /* 動態定位：右邊界對齊對話牆，往上接在對話牆正上方 */
+    const rect=wall.getBoundingClientRect();
+    p.style.right=(window.innerWidth-rect.right)+'px';
+    p.style.bottom=(window.innerHeight-rect.top+8)+'px';
     renderEmojiPicker();
-    p.style.display='block';
+    p.style.display='flex';
     if(!emojiPickerOutsideBound){
       document.addEventListener('mousedown',closeEmojiPickerOutside);
       emojiPickerOutsideBound=true;
@@ -1754,7 +1790,7 @@ async function sendChatMessage(){
   try{
     await addDoc(collection(db,'chatMessages'),{
       from:CU.username,fromName:CU.name,fromStation:CU.station,
-      to,content,createdAt:new Date(),readBy:[CU.username]
+      to,content,createdAt:new Date()
     });
     input.value='';
     document.getElementById('emoji-picker').style.display='none';
@@ -1768,25 +1804,43 @@ function speakChatNotice(){
 
 /* ── S級對話紀錄管理頁面：調閱全部歷史訊息 ── */
 const CHAT_LOG_PAGE_SIZE=20;
-let chatLogAll=[],chatLogFiltered=[],chatLogPage=1,chatLogUnsubscribe=null;
+let chatLogAll=[],chatLogFiltered=[],chatLogPage=1,chatLogLastDoc=null,chatLogHasMore=true,chatLogLoaded=false;
 
-function loadChatLogAll(){
+/* 對話紀錄：進入頁面才一次性查詢（非即時監聽），避免無上限訂閱長期累積讀取成本。
+   分批載入，每次取 100 筆，可手動「載入更多」。*/
+async function loadChatLogAll(forceReload){
   if(!CU||CU.role!=='S')return;
-  if(chatLogUnsubscribe)chatLogUnsubscribe();
-  chatLogUnsubscribe=onSnapshot(
-    query(collection(db,'chatMessages'),orderBy('createdAt','desc')),
-    snap=>{
-      chatLogAll=snap.docs.map(d=>{
-        const data=d.data();
-        const createdAt=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():new Date(data.createdAt);
-        return {...data,id:d.id,createdAt};
-      });
-      populateChatLogStationOptions();
-      populateChatLogMonthOptions();
-      filterChatLog();
-    },
-    e=>console.error('對話紀錄監聽失敗',e)
-  );
+  if(chatLogLoaded&&!forceReload)return;/* 同一登入週期內只查詢一次，除非手動重新整理 */
+  chatLogAll=[];chatLogLastDoc=null;chatLogHasMore=true;
+  await loadMoreChatLog();
+  chatLogLoaded=true;
+}
+async function loadMoreChatLog(){
+  if(!CU||CU.role!=='S'||!chatLogHasMore)return;
+  const btn=document.getElementById('chatlog-loadmore-btn');
+  if(btn){btn.disabled=true;btn.textContent='載入中…';}
+  try{
+    let q=query(collection(db,'chatMessages'),orderBy('createdAt','desc'),limit(100));
+    if(chatLogLastDoc)q=query(collection(db,'chatMessages'),orderBy('createdAt','desc'),startAfter(chatLogLastDoc),limit(100));
+    const snap=await getDocs(q);
+    const newDocs=snap.docs.map(d=>{
+      const data=d.data();
+      const createdAt=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():new Date(data.createdAt);
+      return {...data,id:d.id,createdAt};
+    });
+    chatLogAll=chatLogAll.concat(newDocs);
+    chatLogLastDoc=snap.docs.length?snap.docs[snap.docs.length-1]:chatLogLastDoc;
+    chatLogHasMore=snap.docs.length===100;
+    populateChatLogStationOptions();
+    filterChatLog();
+  }catch(e){console.error('對話紀錄載入失敗',e);}
+  if(btn){btn.disabled=false;btn.textContent='載入更多歷史訊息';}
+  renderChatLogLoadMoreBtn();
+}
+function renderChatLogLoadMoreBtn(){
+  const w=document.getElementById('chatlog-loadmore-wrap');
+  if(!w)return;
+  w.innerHTML=chatLogHasMore?'<button class="btn btn-sm" id="chatlog-loadmore-btn" onclick="loadMoreChatLog()">載入更多歷史訊息</button>':'<span style="font-size:11px;color:var(--color-text-tertiary)">已載入全部歷史訊息</span>';
 }
 function populateChatLogStationOptions(){
   const sel=document.getElementById('cl-station');
@@ -1820,31 +1874,11 @@ function filterChatLog(){
   });
   renderChatLog();
 }
-function populateChatLogMonthOptions(){
-  const sel=document.getElementById('cl-month');
-  if(!sel||sel.dataset.filled)return;
-  const months=new Set();
-  chatLogAll.forEach(m=>{
-    if(m.createdAt){
-      const y=m.createdAt.getFullYear(),mo=(m.createdAt.getMonth()+1).toString().padStart(2,'0');
-      months.add(y+'/'+mo);
-    }
-  });
-  [...months].sort().reverse().forEach(ym=>{
-    const[y,m]=ym.split('/');
-    const opt=document.createElement('option');
-    opt.value=ym;opt.textContent=y+' 年 '+m+' 月';
-    sel.appendChild(opt);
-  });
-  sel.dataset.filled='1';
-}
-function onChatLogMonthChange(){
-  const ym=document.getElementById('cl-month').value;
-  if(ym){
-    const[y,m]=ym.split('/');
-    const lastDay=new Date(parseInt(y),parseInt(m),0).getDate();
-    document.getElementById('cl-date-start').value=y+'-'+m+'-01';
-    document.getElementById('cl-date-end').value=y+'-'+m+'-'+lastDay.toString().padStart(2,'0');
+function onChatLogDateQuickChange(){
+  const d=document.getElementById('cl-date-quick').value;
+  if(d){
+    document.getElementById('cl-date-start').value=d;
+    document.getElementById('cl-date-end').value=d;
   } else {
     document.getElementById('cl-date-start').value='';
     document.getElementById('cl-date-end').value='';
@@ -1853,10 +1887,24 @@ function onChatLogMonthChange(){
 }
 function resetChatLogFilter(){
   document.getElementById('cl-station').value='';
-  document.getElementById('cl-month').value='';
+  document.getElementById('cl-date-quick').value='';
   document.getElementById('cl-date-start').value='';
   document.getElementById('cl-date-end').value='';
   filterChatLog();
+}
+function exportChatLog(){
+  const filtered=chatLogFiltered.length?chatLogFiltered:chatLogAll;
+  if(!filtered.length){showToast('目前沒有符合條件的對話紀錄');return;}
+  const headers=['時間','發送者','發送對象','內容'];
+  const rows=filtered.map(m=>{
+    const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
+    return [timeStr,m.fromName||m.from,targetLabel,m.content];
+  });
+  const now=new Date();
+  downloadCsv('對話紀錄_'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'.csv',rows,headers);
+  addLog('export','匯出對話紀錄（'+filtered.length+'筆）');
+  showToast('匯出完成（'+filtered.length+'筆）');
 }
 function renderChatLog(){
   const totalPages=Math.max(1,Math.ceil(chatLogFiltered.length/CHAT_LOG_PAGE_SIZE));
@@ -1867,9 +1915,7 @@ function renderChatLog(){
   document.getElementById('chatlog-body').innerHTML=pageData.map(m=>{
     const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
     const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
-    const readCount=Array.isArray(m.readBy)?m.readBy.length:0;
-    const total=getMsgTargetAccountCount(m);
-    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td><td style="font-size:11px">'+readCount+'/'+total+'</td></tr>';
+    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td></tr>';
   }).join('');
   document.getElementById('chatlog-count').textContent='共 '+chatLogFiltered.length+' 筆記錄'+(totalPages>1?'　第 '+chatLogPage+' / '+totalPages+' 頁':'');
   renderChatLogPagination(totalPages);
@@ -2278,6 +2324,10 @@ function showPage(el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+el.dataset.page).classList.add('active');
   el.classList.add('active');
+  /* 切換到對話紀錄頁時才載入（避免登入時就無限制查詢全部歷史）*/
+  if(el.dataset.page==='chatlog'){
+    loadChatLogAll();
+  }
   /* 切換到報表頁時更新月報標籤 */
   if(el.dataset.page==='report'){
     const now=new Date();
@@ -2866,25 +2916,25 @@ Object.assign(window,{
   clearHistSelection, clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeEmojiPickerOutside, closeFormModal,
   closeMobileMenu, closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc,
   deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
-  downloadCsv, esc, executeRestore, executeSuspend, exportCustomReport, exportLog, exportMonthReport, filterChatLog,
-  filterLog, finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime, getCalEntry,
-  getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents, getMsgTargetAccountCount, getNextN, getSelectedAccIds, getTodayTTName,
+  downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
+  filterChatLog, filterLog, finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime,
+  getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getFilteredEvents, getNextN, getSelectedAccIds, getTodayTTName,
   getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents,
   insertEmoji, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory,
-  loadLogs, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, markChatMessagesRead,
-  needsDropdownFilter, nowStr, nowStr2, onChatLogMonthChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange,
+  loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect,
+  needsDropdownFilter, nowStr, nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange,
   openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT, openFilePreview,
   openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS,
-  playCurrentSoundCS, playSoundPreview, populateChatLogMonthOptions, populateChatLogStationOptions, populateLogMonthOptions, refreshSoundCurrent, renderAccounts, renderCalMain,
-  renderCalSpecialList, renderChatLog, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents, renderHistory, renderLog,
+  playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
+  renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents, renderHistory, renderLog,
   renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, resetChatLogFilter, resetDevice,
   resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit,
   saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, sendChatMessage, setEventFilter,
-  setSFilter, showAlertCard, showPage, showToast, speakArrivalNotice, speakArrivalNoticeVol, speakChatNotice, speakDangerForCard,
-  speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
-  submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall,
-  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb,
-  updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol, speakChatNotice,
+  speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT,
+  submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist,
+  toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2,
+  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
 });
 
 
