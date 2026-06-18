@@ -227,8 +227,8 @@ input[type=range]{flex:1;accent-color:#378ADD}
 }
 
 /* ── 對話牆 ── */
-.chat-wall{position:fixed;right:16px;bottom:16px;width:25vw;min-width:300px;height:33vh;min-height:280px;max-width:90vw;max-height:90vh;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);background:rgba(255,255,255,0.35);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 4px 24px rgba(0,0,0,.2)}
-@media (prefers-color-scheme:dark){.chat-wall{background:rgba(30,30,30,0.85)}}
+.chat-wall{position:fixed;right:16px;bottom:16px;width:25vw;min-width:300px;height:33vh;min-height:280px;max-width:90vw;max-height:90vh;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);background:rgba(255,255,255,0.16);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 4px 24px rgba(0,0,0,.2)}
+@media (prefers-color-scheme:dark){.chat-wall{background:rgba(30,30,30,0.55)}}
 .chat-wall.collapsed{height:auto!important;min-height:0!important}
 .chat-wall-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:rgba(0,0,0,0.06);flex-shrink:0;cursor:default}
 .chat-wall-body{display:flex;flex-direction:column;flex:1;min-height:0}
@@ -250,8 +250,8 @@ input[type=range]{flex:1;accent-color:#378ADD}
 .chat-input-row{display:flex;gap:6px;align-items:center}
 .chat-input-row input{flex:1;font-size:13px;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary)}
 .chat-emoji-btn{flex-shrink:0}
-.emoji-picker{position:fixed;height:320px;background:rgba(255,255,255,0.35);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
-@media (prefers-color-scheme:dark){.emoji-picker{background:rgba(30,30,30,0.85)}}
+.emoji-picker{position:fixed;height:320px;background:rgba(255,255,255,0.16);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
+@media (prefers-color-scheme:dark){.emoji-picker{background:rgba(30,30,30,0.55)}}
 .emoji-tabs{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);background:rgba(0,0,0,0.06);padding:0 10px;flex-shrink:0}
 .emoji-tab-btn{font-size:13px;padding:10px 16px;border:none;background:none;cursor:pointer;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0}
 .emoji-tab-btn.active{color:#378ADD;font-weight:600;background:rgba(255,255,255,0.55);border-bottom:2px solid #378ADD;margin-bottom:-1px}
@@ -585,7 +585,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <input type="date" id="cl-date-end" onchange="document.getElementById('cl-date-quick').value='';filterChatLog()" style="font-size:12px">
     <button class="btn btn-sm" onclick="resetChatLogFilter()"><i class="ti ti-refresh"></i> 重置篩選</button>
   </div>
-  <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th></tr></thead><tbody id="chatlog-body"></tbody></table></div>
+  <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th><th style="width:60px">操作</th></tr></thead><tbody id="chatlog-body"></tbody></table></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
     <div style="font-size:11px;color:var(--color-text-tertiary)" id="chatlog-count"></div>
     <div style="display:flex;gap:6px;align-items:center" id="chatlog-pagination"></div>
@@ -909,7 +909,7 @@ function loginSuccess(prevLogin,prevIp){
   const ttLabel=document.getElementById('tt-current-label');
   if(ttLabel)ttLabel.textContent='目前判斷結果：'+getTodayTTName();
 
-  setInterval(()=>{tick();},1000);tick();startEventsListener();
+  startTickWorker();tick();startEventsListener();
 }
 function doLogout(){if(confirm('確定登出？')){
   /* 清除所有 onSnapshot listener */
@@ -1481,7 +1481,7 @@ function speakArrivalNotice(){
 
 /* ── 音效 ── */
 let audioCtx=null;
-function ga(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function ga(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});return audioCtx;}
 function bip(a,f,dur,t,v){const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime((v||0.7)*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+dur);o.start(a.currentTime+t);o.stop(a.currentTime+t+dur+0.01);}
 const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w2',name:'三連嗶',tag:'清晰',fn:(v)=>{const a=ga();[[1000,0],[1000,0.2],[1000,0.4]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},{id:'w3',name:'上升嗶嗶',tag:'明顯',fn:(v)=>{const a=ga();[[800,0],[1000,0.22]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w4',name:'鐘聲單音',tag:'悠揚',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=987;g.gain.setValueAtTime(v*0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.3);}},{id:'w5',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'w6',name:'電子嗶聲',tag:'俐落',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='square';o.connect(g);g.connect(a.destination);o.frequency.value=750;g.gain.setValueAtTime(v*0.12,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+0.12);o.start();o.stop(a.currentTime+0.13);}}],danger:[{id:'dv1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakDangerOnce(v);}},{id:'d1',name:'急促雙音',tag:'緊急感',fn:(v)=>{const a=ga();[[1200,0],[900,0.15],[1200,0.3],[900,0.45]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'d2',name:'警報上升',tag:'強烈',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(800,a.currentTime);o.frequency.linearRampToValueAtTime(1400,a.currentTime+0.4);g.gain.setValueAtTime(v*0.28,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);o.start();o.stop(a.currentTime+0.5);}},{id:'d3',name:'快速三連',tag:'急促',fn:(v)=>{const a=ga();[[1100,0],[1100,0.13],[1100,0.26]].forEach(([f,t])=>bip(a,f,0.1,t,v));}},{id:'d4',name:'警笛短音',tag:'警示',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(1000,a.currentTime);o.frequency.setValueAtTime(1300,a.currentTime+0.1);o.frequency.setValueAtTime(1000,a.currentTime+0.2);g.gain.setValueAtTime(v*0.18,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.35);o.start();o.stop(a.currentTime+0.4);}},{id:'d5',name:'緊急嗶鳴',tag:'穿透',fn:(v)=>{const a=ga();[[1400,0],[1400,0.1],[1400,0.2],[1400,0.3]].forEach(([f,t])=>bip(a,f,0.07,t,v));}},{id:'d6',name:'雙頻交替',tag:'識別高',fn:(v)=>{const a=ga();[[900,0],[1300,0.18],[900,0.36],[1300,0.54]].forEach(([f,t])=>bip(a,f,0.14,t,v));}}],success:[{id:'s1',name:'上升音階',tag:'歡樂',fn:(v)=>{const a=ga();[[523,0],[659,0.15],[784,0.3],[1047,0.45]].forEach(([f,t])=>bip(a,f,0.2,t,v));}},{id:'s2',name:'叮咚完成',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.2]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.6);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.7);});}},{id:'s3',name:'三音完成',tag:'溫和',fn:(v)=>{const a=ga();[[659,0],[784,0.18],[987,0.36]].forEach(([f,t])=>bip(a,f,0.22,t,v));}},{id:'s4',name:'五音樂句',tag:'豐富',fn:(v)=>{const a=ga();[[523,0],[587,0.14],[659,0.28],[784,0.42],[1047,0.56]].forEach(([f,t])=>bip(a,f,0.16,t,v));}},{id:'s5',name:'電玩過關',tag:'活潑',fn:(v)=>{const a=ga();[[784,0],[784,0.1],[784,0.2],[659,0.3],[784,0.4]].forEach(([f,t])=>bip(a,f,0.09,t,v));}},{id:'s6',name:'柔和鐘聲',tag:'優雅',fn:(v)=>{const a=ga();[[523,0],[659,0.2],[783,0.4]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.8);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.9);});}},],
   notify:[
@@ -1613,14 +1613,41 @@ const EMOJI_TABS={
          '⏰','⏱️','⏲️','⌛','⏳','🕐','📍','📌','🗺️','🧭','🔔','🔕','📢','📣','📯','📡','💬','💭','🗯️','💡',
          '⚠️','❗','❓','❕','❔','✅','❌','⭕','🆗','🆘','🚫','⛔','🔴','🟠','🟡','🟢','🔵','🟣','⚪','⚫',
          '🌧️','⛈️','🌩️','🌪️','🌀','🌤️','☀️','☁️','💨','🌈','❄️','☔','⚡','🔥','💧','🌊','🌍','🗻','🏢','🏪'],
-  kaomoji1:['(^_^)','(≧▽≦)','(╯︵╰,)','(´；ω；｀)','(>_<)','(T_T)','(つД`)','(；ﾟДﾟ)','(￣▽￣)','(・∀・)',
-            '(°∀°)ﾉ','(ノ´∀｀*)','(╬ Ò ‸ Ó)','(｀∀´)Ψ','(¬_¬)','(￣ω￣)','(o_O)','(・_・;)','(^人^)','(づ￣ ³￣)づ'],
-  kaomoji2:['ヽ(°〇°)ﾉ','orz','m(_ _)m','(*≧ω≦)','(ノД`)','(╥﹏╥)','(ʘ‿ʘ)','(¬‿¬)','(•̥́ ▃ •̀")','(ง •̀_•́)ง',
-            '٩(◕‿◕｡)۶','(づ｡◕‿‿◕｡)づ','(ノ_<)','(；一_一)','ヾ(•ω•`)o','(╯°□°)╯','(°ロ°) !','(¬､¬)','(ノ°益°)ノ','(´∀｀)'],
-  kaomoji3:['☆⌒(*^-゜)v','(*￣3￣)','(｀皿´)','(；´д｀)ゞ','(＠_＠;)','(´-｀).｡oO','(눈_눈)','(ㆆ_ㆆ)','(•‿•)','(¬‿¬)',
-            'ヽ(´▽`)/','(*＞ω＜*)','(；´∀｀)','(╬◣д◢)','(´;ω;`)','(*ﾐ´∀｀)','(￣^￣)','(•́へ•̀)','┐(´д｀)┌','(＞﹏＜)']
+  kaomoji1:[
+            '(^_^)','(^o^)/','(≧▽≦)','(✧∀✧)','(*^▽^*)','(´∀`)',
+            '(♡˙︶˙♡)','(*≧ω≦)','ヽ(´▽`)/','(^▽^)','(=^・ω・^=)','(•‿•)',
+            '(^‿^)','( ˙˘˙ )','(˵ ¬‿¬˵)','(≧◡≦)','( •̀ ω •́ )✧','ヽ(>∀<☆)ノ',
+            '(*°▽°*)','(⌒▽⌒)☆','☆⌒(*^-゜)v','(o^▽^o)','(≧∀≦)','( ´ ▽ ` )ﾉ',
+            '٩(◕‿◕)۶','(´• ω •`)','(｀∀´)Ψ','(ﾐ´∀`ﾐ)','ヾ(＾∇＾)','(★≧▽≦)★',
+            '(✿◠‿◠)','щ(゜▽゜щ)','(＾ｖ＾)','( ﾐ ●ω● ﾐ )','(✯◡✯)','o(≧▽≦)o',
+            '(*´∀`*)','( ^ω^ )','(｀・ω・´)','(´ω`)','٩(｡•ᴗ•｡)۶','ヽ(´ー｀)ノ',
+            '(＠^△^)/','ヽ(>∀<)ﾉ','ヾ(≧▽≦*)o','( ﾟ▽ﾟ)/','(★^O^★)','(´ω｀*)',
+            '(•̀ᴗ•́)و','(｀▽´)','✧◝(⁰▿⁰)◜✧','(灬º╮º灬)','( ・ ̫ ・ )','(＾∀＾)',
+            '(•ᴗ•)','٩(^‿^)۶','(ﾉ´ヮ`)ノ*: ･ﾟ',"(●'◡'●)",'d(´∀`*)','(ﾐ⚈ ﻌ ⚈ﾐ)'],
+  kaomoji2:[
+            '(´；ω；｀)','(｀；ω；´)','m(_ _)m','m(__)m','(ﾉД`)','(；ﾟДﾟ)',
+            '(＞_＜)','(T_T)','(TдT)','(´；д；｀)','orz','OTZ',
+            '(´;ω;`)','(¯﹃¯)','(；´д｀)ゞ','(´-ω-`)','(>_<)','(ノД`)',
+            '(；´Д｀)','(´；ェ；｀)','(>﹏<)','(；O；)','(´∩｀。)','(≧人≦)',
+            'm(_ _;)m','(⌒_⌒;)','(・_・;)','(^_^;)','(´∀｀；)','(；´_ゝ｀)',
+            '┐(´д｀)┌','(；一_一)','(¬､¬)','(´-`).｡oO','(´皿`)','(＠_＠)',
+            '(ノ_<)','ヽ(´o｀；','(¬_¬)','(；￣Д￣)','(´；A；｀)','(´• ﹏ •`)',
+            '(´。＿。｀)','(；ω；)','(╥﹏╥)','(´；︵；｀)','(μ_μ)','ヽ(；▽；)ノ',
+            '(´︶`。)','(—_—)','(；´ロ｀)','(＞﹏＜)','(´；д；）','(´c_,`)',
+            '(T▽T)','(ノ﹏ヽ)','(´-ω-｀)','( ; ; )','(´;Д;`)','(´；ω；)'],
+  kaomoji3:[
+            'Σ(°△°|||)︴','(((°Д°;)))','(・_・?)','(￣～￣;)','(?_?)','(・д・)',
+            'Σ(゜゜)','Σ(･ω･ノ)ノ','( ° ◇ ° )','(ﾒ｀ロ´)','ヾ(`ヘ´)ﾉ','(`・∀・´)',
+            'ε=ε=ε=┌(;*´Д`)ノ','(((( ；°Д°))))','Σ(っ °Д °;)っ','(ノ°益°)ノ','(╬ Ò﹏Ó)','( `ε´ )',
+            '(・` ω ´・)','(`皿´)','( ›´ω`‹ )','☉_☉','( ºωº )','(・・;)',
+            '(-_-;)','( ˙-˙ )',"( 'ω' )",'( •ω•)','(・∇・)','( ・ ω ・ )',
+            '┌(;-;)┘','ヽ(゜ロ゜;)ノ','( ☉ _ ☉ )','( ﾒ_ﾒ )','(´ε｀ )','( ・x・ )',
+            '✓(´∀`)','(-_-)','( ᐛ )','(=ω=)','( ・ ﹁ ・ )','(¬‿¬)',
+            '(・へ・)','(；¬＿¬)','( ✧Д✧)','Σ(=ﾟωﾟ=)','(・ω・)ノ','(｀ー´)',
+            '( ﾐΦ ω Φ ﾐ)','(・∀・)つ','ヾ( ⌐■_■)ノ♪','(•_•)','( ◔ ◡ ◔ )','( ¬,¬)',
+            '( ☆∀☆)','(⊙_⊙)','(°ロ°) !','ヾ(@⌒ー⌒@)ノ','( ・ ̀ω´・ )','(ง •̀_•́)ง']
 };
-const EMOJI_TAB_LABELS={emoji:'表情符號',kaomoji1:'顏文字 1',kaomoji2:'顏文字 2',kaomoji3:'顏文字 3'};
+const EMOJI_TAB_LABELS={emoji:'表情符號',kaomoji1:'顏文字·開心',kaomoji2:'顏文字·抱歉',kaomoji3:'顏文字·驚訝'};
 let activeEmojiTab='emoji';
 let chatMessages=[],chatUnsubscribe=null,chatTargetMode=null,chatTargetStations=[],chatWallCollapsed=false,chatKnownIds=new Set(),chatInitialized=false;
 
@@ -1973,10 +2000,22 @@ function renderChatLog(){
   document.getElementById('chatlog-body').innerHTML=pageData.map(m=>{
     const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
     const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
-    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td></tr>';
+    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td><td><button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" onclick="deleteChatLogMsg(\''+m.id+'\')"><i class="ti ti-trash"></i></button></td></tr>';
   }).join('');
   document.getElementById('chatlog-count').textContent='共 '+chatLogFiltered.length+' 筆記錄'+(totalPages>1?'　第 '+chatLogPage+' / '+totalPages+' 頁':'');
   renderChatLogPagination(totalPages);
+}
+async function deleteChatLogMsg(id){
+  if(!CU||CU.role!=='S')return;
+  if(!confirm('確定刪除此則對話訊息？此操作無法復原。'))return;
+  try{
+    await deleteDoc(doc(db,'chatMessages',id));
+    chatLogAll=chatLogAll.filter(m=>m.id!==id);
+    chatLogFiltered=chatLogFiltered.filter(m=>m.id!==id);
+    renderChatLog();
+    addLog('delete','刪除對話訊息（id:'+id+'）');
+    showToast('已刪除該則訊息');
+  }catch(e){showToast('刪除失敗：'+e.message);}
 }
 function renderChatLogPagination(totalPages){
   const w=document.getElementById('chatlog-pagination');
@@ -2567,6 +2606,26 @@ async function submitEvent(){
   addLog('create','新增事件 '+newFrom+'→'+newTo+' '+newType);
   closeFormModal();
 }
+/* ── 倒數計時的「心跳」改用 Web Worker 驅動 ──
+   原因：分頁縮到最小或切到背景分頁時，瀏覽器會把主執行緒的 setInterval 降頻（甚至幾乎暫停），
+   導致倒數警示音可能完全沒有機會被觸發。獨立的 Worker 執行緒不受分頁可見度影響，
+   持續每秒回傳訊號給主執行緒，主執行緒收到訊號才真正執行 tick() 做判斷與播放音效。 */
+let tickWorker=null;
+function startTickWorker(){
+  if(tickWorker)return;
+  const code='let t=null;self.onmessage=function(e){if(e.data==="start"){if(t)clearInterval(t);t=setInterval(function(){self.postMessage("tick");},1000);}};';
+  const blob=new Blob([code],{type:'application/javascript'});
+  tickWorker=new Worker(URL.createObjectURL(blob));
+  tickWorker.onmessage=function(e){if(e.data==='tick')tick();};
+  tickWorker.postMessage('start');
+  /* 分頁從背景切回可見時，立即補跑一次 tick()，並嘗試喚醒可能被瀏覽器暫停的音訊 */
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden){
+      tick();
+      if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
+    }
+  });
+}
 function tick(){
   const now=new Date();
   const cd=document.getElementById('clock-display');if(cd)cd.textContent=now.getFullYear()+'/'+(now.getMonth()+1).toString().padStart(2,'0')+'/'+now.getDate().toString().padStart(2,'0')+' '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
@@ -3019,7 +3078,7 @@ Object.assign(window,{
   buildSound, calKey, calNextMonth, calPrevMonth, calcDir, canSeeChatMsg, cdCls, clearAccSelection,
   clearHistSelection, clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeEmojiPickerOutside, closeFormModal,
   closeMobileMenu, closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc,
-  deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
+  deleteAccFromDb, deleteChatLogMsg, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
   downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
   filterChatLog, filterLog, finishFail, finishOk, fmt, fmtCd, fileToBase64, ga, getArrivalTime,
   getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents, getNextN,
