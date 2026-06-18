@@ -754,7 +754,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <script type="module">
 /* ── Firebase 初始化 ── */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAZhpwsD_z18qRUdYchFCTT4HB7VWcpQQI",
@@ -1493,6 +1493,11 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
     {id:'c1',name:'輕快雙音',tag:'預設',fn:(v)=>{const a=ga();[[700,0],[950,0.16]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},
     {id:'c2',name:'氣泡音',tag:'柔和',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(600,a.currentTime);o.frequency.exponentialRampToValueAtTime(900,a.currentTime+0.15);g.gain.setValueAtTime(v*0.2,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.3);o.start();o.stop(a.currentTime+0.35);}},
     {id:'c3',name:'語音播報',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則新的對話訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}}
+  ],
+  t30:[
+    {id:'t30-1',name:'急促雙嗶',tag:'簡短',fn:(v)=>{const a=ga();[[1050,0],[1050,0.18]].forEach(([f,t])=>bip(a,f,0.14,t,v));}},
+    {id:'t30-2',name:'提示鐘聲',tag:'柔和',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=1175;g.gain.setValueAtTime(v*0.26,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.9);o.start();o.stop(a.currentTime+1.0);}},
+    {id:'t30-3',name:'語音播報',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('時間差不多了，請準備');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}}
   ]};
 
 /* ══ 音效設定（新版） ══ */
@@ -1502,6 +1507,7 @@ const SOUND_SECTIONS_CFG=[
   {k:'success',icon:'✅', label:'到站完成音',                  desc:'列車抵達時觸發，重複播放直到按下確認'},
   {k:'notify', icon:'📢', label:'收到引導訊息提醒音',           desc:'其他站新增引導事件、本站為迄站時觸發（語音播報3次）'},
   {k:'chat',   icon:'💬', label:'收到對話訊息提醒音',           desc:'對話牆收到新訊息時觸發'},
+  {k:'t30',    icon:'⏳', label:'時間差不多囉提醒音（30秒警示）', desc:'倒數達30秒時觸發，僅播放一次', toggleable:true},
 ];
 const SOUND_DEFAULTS={
   warn:   {type:'preset',id:'w1',name:'雙嗶提示'},
@@ -1509,6 +1515,7 @@ const SOUND_DEFAULTS={
   success:{type:'preset',id:'s1',name:'上升音階'},
   notify: {type:'voice', id:'v1',name:'語音播報'},
   chat:   {type:'preset',id:'c1',name:'輕快雙音'},
+  t30:    {type:'preset',id:'t30-1',name:'急促雙嗶'},
 };
 const SC={
   warn:   {current:{type:'preset',id:'w1',name:'雙嗶提示'},   vol:70},
@@ -1516,6 +1523,7 @@ const SC={
   success:{current:{type:'preset',id:'s1',name:'上升音階'},   vol:70},
   notify: {current:{type:'voice', id:'v1',name:'語音播報'},   vol:80},
   chat:   {current:{type:'preset',id:'c1',name:'輕快雙音'},   vol:70},
+  t30:    {current:{type:'preset',id:'t30-1',name:'急促雙嗶'},vol:75, disabled:false},
 };
 let soundReplaceKey=null,soundReplaceSel=null,soundReplaceFile=null;
 let soundPlayingId=null,soundPlayInterval=null;
@@ -1523,10 +1531,11 @@ let soundPlayingId=null,soundPlayInterval=null;
 function buildSound(){
   const cards=document.getElementById('sound-cards');if(!cards)return;
   cards.innerHTML=SOUND_SECTIONS_CFG.map(s=>`
-    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;margin-bottom:10px">
+    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;margin-bottom:10px;opacity:${s.toggleable&&SC[s.k].disabled?'0.55':'1'}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
         <div style="width:36px;height:36px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--color-background-secondary);flex-shrink:0">${s.icon}</div>
-        <div><div style="font-size:13px;font-weight:500;color:var(--color-text-primary)">${s.label}</div><div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">${s.desc}</div></div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--color-text-primary)">${s.label}</div><div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">${s.desc}</div></div>
+        ${s.toggleable?`<button class="btn btn-sm" style="${SC[s.k].disabled?'color:#9AA0A6;border-color:#9AA0A6':'color:#1D9E75;border-color:#1D9E75'};flex-shrink:0" onclick="toggleSoundDisabled('${s.k}')"><i class="ti ti-${SC[s.k].disabled?'bell-off':'bell'}"></i> ${SC[s.k].disabled?'已停用':'已啟用'}</button>`:''}
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 13px;margin-bottom:10px" id="scur-${s.k}">
         <div style="display:flex;align-items:center;gap:8px">
@@ -1566,6 +1575,12 @@ function updateSoundVol(k,val){
   const lb=document.getElementById('svol-lbl-'+k);
   if(lb)lb.textContent=val+'%';
 }
+async function toggleSoundDisabled(k){
+  SC[k].disabled=!SC[k].disabled;
+  buildSound();
+  await saveAllSound(true);
+  showToast(SC[k].disabled?'已停用':'已啟用');
+}
 
 async function saveAllSound(silent){
   if(!CU)return;
@@ -1575,6 +1590,7 @@ async function saveAllSound(silent){
     success:{id:SC.success.current.id,type:SC.success.current.type,name:SC.success.current.name,vol:SC.success.vol},
     notify:{id:SC.notify.current.id,type:SC.notify.current.type,name:SC.notify.current.name,vol:SC.notify.vol},
     chat:{id:SC.chat.current.id,type:SC.chat.current.type,name:SC.chat.current.name,vol:SC.chat.vol},
+    t30:{id:SC.t30.current.id,type:SC.t30.current.type,name:SC.t30.current.name,vol:SC.t30.vol,disabled:!!SC.t30.disabled},
     by:CU.username+'·'+CU.name,
     at:new Date(),
   };
@@ -1986,24 +2002,42 @@ function loadSoundSettings(){
   if(!CU)return;
   if(soundUnsubscribe)soundUnsubscribe();
   /* 全域單一設定，S級編輯，所有帳號即時同步套用 */
-  soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
+  soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),async snap=>{
     if(snap.exists()){
       const d=snap.data();
-      ['warn','danger','success','notify','chat'].forEach(k=>{
+      for(const k of ['warn','danger','success','notify','chat','t30']){
         if(d[k]){
+          const prevType=SC[k].current.type,prevName=SC[k].current.name;
           SC[k].current={type:d[k].type,id:d[k].id,name:d[k].name};
           SC[k].vol=typeof d[k].vol==='number'?d[k].vol:SC[k].vol;
+          if(typeof d[k].disabled==='boolean')SC[k].disabled=d[k].disabled;
+          /* 自訂音效：型別變成custom，或檔名跟上次不同時，才向Firebase抓音檔資料（避免重複下載） */
+          if(d[k].type==='custom'&&(prevType!=='custom'||prevName!==d[k].name||!SC[k]._audioBuffer)){
+            await loadCustomAudio(k);
+          }
         }
-      });
+      }
     }
     buildSound();
-    ['warn','danger','success','notify','chat'].forEach(k=>{
+    ['warn','danger','success','notify','chat','t30'].forEach(k=>{
       const el=document.getElementById('svol-'+k);
       const lb=document.getElementById('svol-lbl-'+k);
       if(el)el.value=SC[k].vol;
       if(lb)lb.textContent=SC[k].vol+'%';
     });
   },e=>console.error('音效設定監聽失敗',e));
+}
+/* 從 soundAudio collection 按需讀取自訂音效的 base64 資料，解碼成可播放的 AudioBuffer */
+async function loadCustomAudio(k){
+  try{
+    const snap=await getDoc(doc(db,'soundAudio',k));
+    if(!snap.exists()){console.warn('找不到自訂音效資料',k);return;}
+    const base64=snap.data().data;
+    const res=await fetch(base64);
+    const ab=await res.arrayBuffer();
+    const ctx=new AudioContext();
+    SC[k]._audioBuffer=await ctx.decodeAudioData(ab);
+  }catch(e){console.error('載入自訂音效失敗',k,e);}
 }
 function playCurrentSoundCS(k){if(k==='danger'&&SC.danger.current.type==='voice'){speakDangerPreview();}else{playCS(k);}}
 
@@ -2045,21 +2079,44 @@ function playSoundPreview(k,id,btn){
 }
 function handleSoundUpload(input){
   const file=input.files[0];if(!file)return;
+  const MAX=700*1024;
+  if(file.size>MAX){
+    showToast('檔案過大（'+Math.round(file.size/1024)+'KB），請控制在 700KB 以下');
+    input.value='';
+    return;
+  }
   soundReplaceFile=file;soundReplaceSel=null;
   const fi=document.getElementById('sound-upload-info');
   if(fi){fi.style.display='flex';fi.innerHTML='<i class="ti ti-check" style="color:#1D9E75"></i>'+file.name+' ('+Math.round(file.size/1024)+' KB)　已選取';}
   renderSoundReplaceList();
 }
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=()=>reject(new Error('讀取檔案失敗'));
+    r.readAsDataURL(file);
+  });
+}
 async function confirmSoundReplace(){
   if(!soundReplaceKey)return;
   let isCustomUpload=false;
   if(soundReplaceFile){
-    /* 解碼音訊檔案存入 SC._audioBuffer */
+    let base64;
     try{
+      base64=await fileToBase64(soundReplaceFile);
       const ab=await soundReplaceFile.arrayBuffer();
       const ctx=new AudioContext();
       SC[soundReplaceKey]._audioBuffer=await ctx.decodeAudioData(ab);
-    }catch(e){console.error('音訊解碼失敗',e);}
+    }catch(e){console.error('音訊解碼失敗',e);showToast('音訊處理失敗：'+e.message);return;}
+    try{
+      await setDoc(doc(db,'soundAudio',soundReplaceKey),{
+        data:base64,
+        fileName:soundReplaceFile.name,
+        uploadedAt:serverTimestamp(),
+        by:CU.username+'·'+CU.name
+      });
+    }catch(e){showToast('音效檔上傳失敗：'+e.message);return;}
     SC[soundReplaceKey].current={type:'custom',name:soundReplaceFile.name,id:null};
     isCustomUpload=true;
   } else if(soundReplaceSel){
@@ -2144,7 +2201,7 @@ async function updateEventInDb(id,data){
 async function deleteEventFromDb(id){
   try{await deleteDoc(doc(db,'events',id));}catch(e){console.error(e);}
 }
-const wF=new Set(),dF=new Set(),doF=new Set(),autoCloseF=new Set();
+const wF=new Set(),dF=new Set(),doF=new Set(),autoCloseF=new Set(),t30F=new Set();
 /* ── 堆疊式通知卡片機制：每個事件獨立顯示、獨立音效、獨立結案 ── */
 const activeAlertCards=new Map();/* eventId -> {type,soundKey,intervalId,ttsLooping,ttsTimeout} */
 
@@ -2529,6 +2586,11 @@ function tick(){
     if(ms<=90000&&ms>0&&!dF.has(ev.id)){
       dF.add(ev.id);
       if(isMyArrival){showAlertCard(ev.id,'danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger');}
+    }
+    /* 30秒警示：僅播放一次，不建立警示卡，停用開關可擋下播放 */
+    if(ms<=30000&&ms>0&&!t30F.has(ev.id)){
+      t30F.add(ev.id);
+      if(isMyArrival&&!SC.t30.disabled)playCS('t30');
     }
     if(ms<=0&&!doF.has(ev.id)){
       doF.add(ev.id);
@@ -2959,11 +3021,11 @@ Object.assign(window,{
   closeMobileMenu, closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc,
   deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
   downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
-  filterChatLog, filterLog, finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime,
+  filterChatLog, filterLog, finishFail, finishOk, fmt, fmtCd, fileToBase64, ga, getArrivalTime,
   getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents, getNextN,
   getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile,
   handleSoundUpload, initTTTableEvents, insertEmoji, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadChatLogAll,
-  loadChatMessages, loadHistory, loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions,
+  loadChatMessages, loadCustomAudio, loadHistory, loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions,
   loginSuccess, makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange,
   onSReasonChange, onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal,
   openEditTT, openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal,
@@ -2975,7 +3037,7 @@ Object.assign(window,{
   selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList,
   speakArrivalNotice, speakArrivalNoticeVol, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener,
   startLock, stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick,
-  todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin,
+  todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, toggleSoundDisabled, ttTimeToMin,
   updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol,
   updateTrains, uploadLogo
 });
@@ -3153,7 +3215,7 @@ Object.assign(window,{
       <input type="file" accept=".mp3,.wav,.ogg" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="handleSoundUpload(this)">
       <i class="ti ti-file-upload" style="font-size:20px;color:var(--color-text-tertiary);display:block;margin-bottom:4px"></i>
       <div style="font-size:12px;color:var(--color-text-secondary)">點擊或拖曳上傳</div>
-      <div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">MP3 / WAV / OGG，2MB 以下</div>
+      <div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">MP3 / WAV / OGG，700KB 以下</div>
       <div id="sound-upload-info" style="font-size:11px;color:#1D9E75;margin-top:6px;display:none;align-items:center;gap:4px;justify-content:center"></div>
     </div>
   </div>
