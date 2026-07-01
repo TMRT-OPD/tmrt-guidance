@@ -1501,7 +1501,14 @@ function getIntermediateStations(from,to){
 function onTypeChange(){
   const t=(document.getElementById('f-type')||{}).value||'';
   const w=document.getElementById('bike-count-wrap');
+  const gate=document.getElementById('f-gate');
   if(w)w.style.display=t==='自行車旅客'?'block':'none';
+  /* 自行車旅客固定使用 02/09 車門，停用一般車門選擇 */
+  if(gate){
+    gate.disabled=t==='自行車旅客';
+    gate.style.opacity=t==='自行車旅客'?'0.35':'1';
+    gate.style.cursor=t==='自行車旅客'?'not-allowed':'';
+  }
   if(t==='自行車旅客') updateBikeCapacity();
   else{const ci=document.getElementById('bike-cap-info');if(ci)ci.style.display='none';}
 }
@@ -1520,12 +1527,18 @@ function updateBikeCapacity(){
   }
   const selTime=new Date(sel.value).getTime();
   const dir=(document.getElementById('f-dir')||{}).value||'down';
-  /* 同班次其他自行車事件（排除正在編輯的自身） */
+  const selArrival=sel.dataset.arr||''; /* 所選班次抵達迄站的時間 */
+  const selTo=document.getElementById('f-to').value||'';
+  /* 同班次判斷：優先用「迄站相同 + 到站時間相同」（不同起站但同一班車的情境）
+     若缺乏資料則回退到起站發車時間 ±5 分鐘 */
   const sameTrain=events.filter(ev=>{
     if(ev.id===editId)return false;
     if(ev.type!=='自行車旅客')return false;
     if(ev.dir!==dir)return false;
-    return Math.abs(ev.departTime.getTime()-selTime)<120000;
+    if(selArrival&&selTo&&ev.arrivalTimeStr&&ev.to){
+      return ev.to===selTo&&ev.arrivalTimeStr===selArrival;
+    }
+    return Math.abs(ev.departTime.getTime()-selTime)<300000;
   });
   const usedD2=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor2||0),0);
   const usedD9=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor9||0),0);
@@ -2727,6 +2740,8 @@ function openModal(){
 }
 function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;document.getElementById('f-edit-id').value=id;document.getElementById('mf-title').textContent='編輯引導事件';document.getElementById('mf-submit').textContent='儲存變更';document.getElementById('train-sel-wrap').style.display='none';document.getElementById('f-from').value=ev.from;document.getElementById('f-to').value=ev.to;document.getElementById('f-dir').value=ev.dir;document.getElementById('dir-display').textContent=ev.dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';document.getElementById('f-train').value=ev.trainGroup||'';document.getElementById('f-type').value=ev.type;document.getElementById('f-gate').value=ev.gate;document.getElementById('f-gender').value=ev.gender;parseNote(ev.note||'');
   const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display=ev.type==='自行車旅客'?'block':'none';
+  const gate=document.getElementById('f-gate');
+  if(gate){gate.disabled=ev.type==='自行車旅客';gate.style.opacity=ev.type==='自行車旅客'?'0.35':'1';gate.style.cursor=ev.type==='自行車旅客'?'not-allowed':'';}
   if(ev.type==='自行車旅客'){const b2=document.getElementById('f-bike2');const b9=document.getElementById('f-bike9');if(b2)b2.value=ev.bikeDoor2||0;if(b9)b9.value=ev.bikeDoor9||0;}
   document.getElementById('modal-form').classList.add('open');}
 function closeFormModal(){document.getElementById('modal-form').classList.remove('open');}
