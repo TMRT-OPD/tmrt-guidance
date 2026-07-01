@@ -637,6 +637,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
         <div class="form-group"><div class="form-label">02車門 台數 <span>*</span></div><select id="f-bike2"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
         <div class="form-group"><div class="form-label">09車門 台數 <span>*</span></div><select id="f-bike9"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
       </div>
+      <div id="bike-cap-info" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;border-left:3px solid #E8861A;background:#FEF4D6;margin-bottom:8px;line-height:1.6"></div>
       <div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;margin-bottom:10px"><i class="ti ti-info-circle" style="font-size:12px"></i> 單列車最多 4 台（02車門及09車門各最多 2 台）</div>
     </div>
     <div class="form-group" id="train-sel-wrap"><div class="form-label">班次選擇 <span>*</span></div><div class="next-trains"><div class="next-trains-title">系統自動帶入最近班次，可選擇其他班次：</div><div id="train-options"></div></div></div>
@@ -1501,6 +1502,58 @@ function onTypeChange(){
   const t=(document.getElementById('f-type')||{}).value||'';
   const w=document.getElementById('bike-count-wrap');
   if(w)w.style.display=t==='自行車旅客'?'block':'none';
+  if(t==='自行車旅客') updateBikeCapacity();
+  else{const ci=document.getElementById('bike-cap-info');if(ci)ci.style.display='none';}
+}
+function updateBikeCapacity(){
+  if(!document.getElementById('f-type')||document.getElementById('f-type').value!=='自行車旅客')return;
+  const editId=(document.getElementById('f-edit-id')||{}).value||'';
+  const b2=document.getElementById('f-bike2'),b9=document.getElementById('f-bike9');
+  const ci=document.getElementById('bike-cap-info');
+  if(!b2||!b9)return;
+  const sel=document.querySelector('input[name="tsel"]:checked');
+  if(!sel){
+    [...b2.options].forEach(o=>o.disabled=false);
+    [...b9.options].forEach(o=>o.disabled=false);
+    if(ci)ci.style.display='none';
+    return;
+  }
+  const selTime=new Date(sel.value).getTime();
+  const dir=(document.getElementById('f-dir')||{}).value||'down';
+  /* 同班次其他自行車事件（排除正在編輯的自身） */
+  const sameTrain=events.filter(ev=>{
+    if(ev.id===editId)return false;
+    if(ev.type!=='自行車旅客')return false;
+    if(ev.dir!==dir)return false;
+    return Math.abs(ev.departTime.getTime()-selTime)<120000;
+  });
+  const usedD2=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor2||0),0);
+  const usedD9=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor9||0),0);
+  const maxD2=Math.max(0,2-usedD2),maxD9=Math.max(0,2-usedD9);
+  /* 更新選項：超出上限者 disabled */
+  [...b2.options].forEach(o=>{
+    const v=parseInt(o.value);o.disabled=v>maxD2;
+    if(v>maxD2&&parseInt(b2.value)>maxD2)b2.value=String(maxD2);
+  });
+  [...b9.options].forEach(o=>{
+    const v=parseInt(o.value);o.disabled=v>maxD9;
+    if(v>maxD9&&parseInt(b9.value)>maxD9)b9.value=String(maxD9);
+  });
+  /* 容量提示 */
+  if(ci){
+    const total=usedD2+usedD9;
+    const isFull=total>=4;
+    if(total>0){
+      ci.style.display='block';
+      ci.style.borderLeftColor=isFull?'#E24B4A':'#E8861A';
+      ci.style.background=isFull?'#FCEBEB':'#FEF4D6';
+      ci.innerHTML='<i class="ti ti-alert-circle" style="color:'+(isFull?'#E24B4A':'#E8861A')+';font-size:12px"></i> '+
+        (isFull?'<strong>此班列車自行車已額滿（4台），無法繼續新增</strong>':'同班次已登記 '+total+' 台自行車')+
+        '<br><span style="color:var(--color-text-secondary)">02車門已登記 '+usedD2+' 台（剩餘 '+maxD2+' 台）／ 09車門已登記 '+usedD9+' 台（剩餘 '+maxD9+' 台）</span>';
+    } else {
+      ci.style.display='none';
+    }
+  }
 }
 function speakTTS3x(msg,vol){
   if(!window.speechSynthesis)return;
@@ -1527,7 +1580,21 @@ function speakGroupNotify(){speakTTS3x('您有一則團體旅客搭乘通知',SC
 function renderTransitBanner(){
   const wrap=document.getElementById('transit-banner-wrap');if(!wrap||!CU)return;
   const myStation=CU.station;
-  const transitEvs=events.filter(ev=>ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(myStation));
+  const now=new Date();
+  const transitEvs=events.filter(ev=>{
+    if(ev.type!=='自行車旅客')return false;
+    if(!getIntermediateStations(ev.from,ev.to).includes(myStation))return false;
+    /* 計算列車途經本站的預計時間，若已通過則自動隱藏 */
+    const meTimeStr=getArrivalTime(ev.from,ev.departTimeStr||'',myStation,ev.dir||'down');
+    if(meTimeStr){
+      const[h,m]=meTimeStr.split(':').map(Number);
+      const meTime=new Date(ev.departTime);
+      meTime.setHours(h<5?h+24:h,m,0,0);
+      if(h<5&&meTime<ev.departTime)meTime.setDate(meTime.getDate()+1);
+      if(now>=meTime)return false;/* 已途經，不顯示 */
+    }
+    return true;
+  });
   if(!transitEvs.length){wrap.innerHTML='';wrap.style.display='none';return;}
   wrap.style.display='flex';
   wrap.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
@@ -2316,10 +2383,19 @@ function startCardLoop(eventId,soundKey){
   stopCardLoop(eventId);
   const a=activeAlertCards.get(eventId);
   if(!a)return;
+  /* danger TTS：遞迴循環直到確認 */
   if(soundKey==='danger'&&SC.danger.current.type==='voice'){
     a.ttsLooping=true;
     speakDangerForCard(eventId);
-  } else {
+  /* bike_arrive / group_arrive TTS：speakTTS3x 內部已處理 3 次，不能再走 700ms 迴圈
+     否則 window.speechSynthesis.cancel() 會在每 700ms 時打斷語音 */
+  } else if(soundKey==='bike_arrive'){
+    if(SC.bike_arrive.current.type==='voice') speakBikeArriveNotice();
+    else{playCS(soundKey);a.intervalId=setInterval(()=>playCS(soundKey),700);}
+  } else if(soundKey==='group_arrive'){
+    if(SC.group_arrive.current.type==='voice') speakGroupArriveNotice();
+    else{playCS(soundKey);a.intervalId=setInterval(()=>playCS(soundKey),700);}
+  } else if(soundKey){
     playCS(soundKey);
     a.intervalId=setInterval(()=>playCS(soundKey),700);
   }
@@ -2586,7 +2662,7 @@ function updateTrains(){
     const departStr=dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
     const arrStr=getArrivalTime(st,departStr,to,dir);
     const arrInfo=arrStr?'<span style="font-size:10px;color:#1D9E75;margin-left:6px">→ '+SN[to]+'站 '+arrStr+' 到站</span>':'';
-    return '<label class="train-option '+(i===0?'selected':'')+'"><input type="radio" name="tsel" value="'+dt.toISOString()+'" data-depart="'+departStr+'" data-arr="'+(arrStr||'')+'" '+(i===0?'checked':'')+' onchange="this.closest(\'.next-trains\').querySelectorAll(\'.train-option\').forEach(x=>x.classList.remove(\'selected\'));this.closest(\'.train-option\').classList.add(\'selected\');">'+fmt(dt)+' 發車'+(i===0?' <span style="font-size:10px;color:#0c447c">（下一班）</span>':'')+(arrInfo?arrInfo:'')+'</label>';
+    return '<label class="train-option '+(i===0?'selected':'')+'"><input type="radio" name="tsel" value="'+dt.toISOString()+'" data-depart="'+departStr+'" data-arr="'+(arrStr||'')+'" '+(i===0?'checked':'')+' onchange="this.closest(\'.next-trains\').querySelectorAll(\'.train-option\').forEach(x=>x.classList.remove(\'selected\'));this.closest(\'.train-option\').classList.add(\'selected\');updateBikeCapacity();">'+fmt(dt)+' 發車'+(i===0?' <span style="font-size:10px;color:#0c447c">（下一班）</span>':'')+(arrInfo?arrInfo:'')+'</label>';
   }).join('');
 }
 function clearNF(){['f-n1','f-n2','f-n3','f-n4','f-n5'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';})}
@@ -3152,8 +3228,8 @@ Object.assign(window,{
   speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice,
   speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
   submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall,
-  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb,
-  updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2,
+  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
 });
 
 
