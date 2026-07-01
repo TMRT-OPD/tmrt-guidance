@@ -634,8 +634,8 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <div class="form-group"><div class="form-label">旅客類別 <span>*</span></div><select id="f-type" onchange="onTypeChange()"><option>視障旅客</option><option>年長旅客</option><option>輪椅旅客（攜帶輪椅）</option><option>輪椅旅客（協助駐留）</option><option>自行車旅客</option><option>團體旅客</option><option>其他</option></select></div>
     <div id="bike-count-wrap" style="display:none">
       <div class="form-row">
-        <div class="form-group"><div class="form-label">02車門 台數 <span>*</span></div><select id="f-bike2"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
-        <div class="form-group"><div class="form-label">09車門 台數 <span>*</span></div><select id="f-bike9"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
+        <div class="form-group"><div class="form-label">02車門 台數 <span>*</span></div><select id="f-bike2"><option value="0" selected>0 台</option><option value="1">1 台</option><option value="2">2 台</option></select></div>
+        <div class="form-group"><div class="form-label">09車門 台數 <span>*</span></div><select id="f-bike9"><option value="0" selected>0 台</option><option value="1">1 台</option><option value="2">2 台</option></select></div>
       </div>
       <div id="bike-cap-info" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;border-left:3px solid #E8861A;background:#FEF4D6;margin-bottom:8px;line-height:1.6"></div>
       <div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;margin-bottom:10px"><i class="ti ti-info-circle" style="font-size:12px"></i> 單列車最多 4 台（02車門及09車門各最多 2 台）</div>
@@ -2734,17 +2734,31 @@ function openModal(){
     fromLocked.style.display='none';
   }
   clearNF();autoDir();
-  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
+  /* 完整重置自行車旅客相關狀態，避免前次選擇殘留 */
   document.getElementById('f-type').value='視障旅客';
-  document.getElementById('modal-form').classList.add('open');
-}
+  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
+  const bci=document.getElementById('bike-cap-info');if(bci){bci.style.display='none';}
+  const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
+  const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
+  const gate=document.getElementById('f-gate');
+  if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';gate.value='01 車門';}
+  document.getElementById('modal-form').classList.add('open');}
 function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;document.getElementById('f-edit-id').value=id;document.getElementById('mf-title').textContent='編輯引導事件';document.getElementById('mf-submit').textContent='儲存變更';document.getElementById('train-sel-wrap').style.display='none';document.getElementById('f-from').value=ev.from;document.getElementById('f-to').value=ev.to;document.getElementById('f-dir').value=ev.dir;document.getElementById('dir-display').textContent=ev.dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';document.getElementById('f-train').value=ev.trainGroup||'';document.getElementById('f-type').value=ev.type;document.getElementById('f-gate').value=ev.gate;document.getElementById('f-gender').value=ev.gender;parseNote(ev.note||'');
   const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display=ev.type==='自行車旅客'?'block':'none';
   const gate=document.getElementById('f-gate');
   if(gate){gate.disabled=ev.type==='自行車旅客';gate.style.opacity=ev.type==='自行車旅客'?'0.35':'1';gate.style.cursor=ev.type==='自行車旅客'?'not-allowed':'';}
   if(ev.type==='自行車旅客'){const b2=document.getElementById('f-bike2');const b9=document.getElementById('f-bike9');if(b2)b2.value=ev.bikeDoor2||0;if(b9)b9.value=ev.bikeDoor9||0;}
   document.getElementById('modal-form').classList.add('open');}
-function closeFormModal(){document.getElementById('modal-form').classList.remove('open');}
+function closeFormModal(){
+  document.getElementById('modal-form').classList.remove('open');
+  /* 關閉時重置 gate 啟用狀態與自行車台數，防止下次開啟時殘留 */
+  const gate=document.getElementById('f-gate');
+  if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';}
+  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
+  const bci=document.getElementById('bike-cap-info');if(bci)bci.style.display='none';
+  const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
+  const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
+}
 async function submitEvent(){
   const eid=document.getElementById('f-edit-id').value,note=buildNote();
   if(eid){
