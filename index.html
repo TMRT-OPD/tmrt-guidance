@@ -1763,11 +1763,16 @@ function updateSoundVol(k,val){
 async function saveAllSound(silent){
   if(!CU)return;
   const data={
-    warn: {id:SC.warn.current.id,type:SC.warn.current.type,name:SC.warn.current.name,vol:SC.warn.vol},
-    danger:{id:SC.danger.current.id,type:SC.danger.current.type,name:SC.danger.current.name,vol:SC.danger.vol},
-    success:{id:SC.success.current.id,type:SC.success.current.type,name:SC.success.current.name,vol:SC.success.vol},
-    notify:{id:SC.notify.current.id,type:SC.notify.current.type,name:SC.notify.current.name,vol:SC.notify.vol},
-    chat:{id:SC.chat.current.id,type:SC.chat.current.type,name:SC.chat.current.name,vol:SC.chat.vol},
+    warn:        {id:SC.warn.current.id,        type:SC.warn.current.type,        name:SC.warn.current.name,        vol:SC.warn.vol},
+    danger:      {id:SC.danger.current.id,       type:SC.danger.current.type,      name:SC.danger.current.name,      vol:SC.danger.vol},
+    success:     {id:SC.success.current.id,      type:SC.success.current.type,     name:SC.success.current.name,     vol:SC.success.vol},
+    notify:      {id:SC.notify.current.id,       type:SC.notify.current.type,      name:SC.notify.current.name,      vol:SC.notify.vol},
+    chat:        {id:SC.chat.current.id,         type:SC.chat.current.type,        name:SC.chat.current.name,        vol:SC.chat.vol},
+    bike_arrive: {id:SC.bike_arrive.current.id,  type:SC.bike_arrive.current.type, name:SC.bike_arrive.current.name, vol:SC.bike_arrive.vol},
+    bike_transit:{id:SC.bike_transit.current.id, type:SC.bike_transit.current.type,name:SC.bike_transit.current.name,vol:SC.bike_transit.vol},
+    group_arrive:{id:SC.group_arrive.current.id, type:SC.group_arrive.current.type,name:SC.group_arrive.current.name,vol:SC.group_arrive.vol},
+    bike_notify: {id:SC.bike_notify.current.id,  type:SC.bike_notify.current.type, name:SC.bike_notify.current.name, vol:SC.bike_notify.vol},
+    group_notify:{id:SC.group_notify.current.id, type:SC.group_notify.current.type,name:SC.group_notify.current.name,vol:SC.group_notify.vol},
     by:CU.username+'·'+CU.name,
     at:new Date(),
   };
