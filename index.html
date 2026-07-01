@@ -1571,9 +1571,9 @@ function speakTTS3x(msg,vol){
   }
   doSpeak();
 }
-function speakBikeArriveNotice(){speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱票',SC.bike_arrive.vol/100);}
+function speakBikeArriveNotice(){speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱紙',SC.bike_arrive.vol/100);}
 function speakBikeTransitNotice(){speakTTS3x('自行車旅客搭乘列車途經本站，車票販售前請注意自行車數量',SC.bike_transit.vol/100);}
-function speakGroupArriveNotice(){speakTTS3x('有團體旅客將於本站下車，請準備回收感熱票',SC.group_arrive.vol/100);}
+function speakGroupArriveNotice(){speakTTS3x('有團體旅客將於本站下車，請準備回收感熱紙',SC.group_arrive.vol/100);}
 function speakBikeNotify(){speakTTS3x('您有一則自行車旅客搭乘通知',SC.bike_notify.vol/100);}
 function speakGroupNotify(){speakTTS3x('您有一則團體旅客搭乘通知',SC.group_notify.vol/100);}
 
@@ -1636,7 +1636,14 @@ function speakArrivalNotice(){
 let audioCtx=null;
 function ga(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
 function bip(a,f,dur,t,v){const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime((v||0.7)*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+dur);o.start(a.currentTime+t);o.stop(a.currentTime+t+dur+0.01);}
-const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w2',name:'三連嗶',tag:'清晰',fn:(v)=>{const a=ga();[[1000,0],[1000,0.2],[1000,0.4]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},{id:'w3',name:'上升嗶嗶',tag:'明顯',fn:(v)=>{const a=ga();[[800,0],[1000,0.22]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w4',name:'鐘聲單音',tag:'悠揚',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=987;g.gain.setValueAtTime(v*0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.3);}},{id:'w5',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'w6',name:'電子嗶聲',tag:'俐落',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='square';o.connect(g);g.connect(a.destination);o.frequency.value=750;g.gain.setValueAtTime(v*0.12,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+0.12);o.start();o.stop(a.currentTime+0.13);}}],danger:[{id:'dv1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakDangerOnce(v);}},{id:'d1',name:'急促雙音',tag:'緊急感',fn:(v)=>{const a=ga();[[1200,0],[900,0.15],[1200,0.3],[900,0.45]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'d2',name:'警報上升',tag:'強烈',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(800,a.currentTime);o.frequency.linearRampToValueAtTime(1400,a.currentTime+0.4);g.gain.setValueAtTime(v*0.28,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);o.start();o.stop(a.currentTime+0.5);}},{id:'d3',name:'快速三連',tag:'急促',fn:(v)=>{const a=ga();[[1100,0],[1100,0.13],[1100,0.26]].forEach(([f,t])=>bip(a,f,0.1,t,v));}},{id:'d4',name:'警笛短音',tag:'警示',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(1000,a.currentTime);o.frequency.setValueAtTime(1300,a.currentTime+0.1);o.frequency.setValueAtTime(1000,a.currentTime+0.2);g.gain.setValueAtTime(v*0.18,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.35);o.start();o.stop(a.currentTime+0.4);}},{id:'d5',name:'緊急嗶鳴',tag:'穿透',fn:(v)=>{const a=ga();[[1400,0],[1400,0.1],[1400,0.2],[1400,0.3]].forEach(([f,t])=>bip(a,f,0.07,t,v));}},{id:'d6',name:'雙頻交替',tag:'識別高',fn:(v)=>{const a=ga();[[900,0],[1300,0.18],[900,0.36],[1300,0.54]].forEach(([f,t])=>bip(a,f,0.14,t,v));}}],success:[{id:'s1',name:'上升音階',tag:'歡樂',fn:(v)=>{const a=ga();[[523,0],[659,0.15],[784,0.3],[1047,0.45]].forEach(([f,t])=>bip(a,f,0.2,t,v));}},{id:'s2',name:'叮咚完成',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.2]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.6);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.7);});}},{id:'s3',name:'三音完成',tag:'溫和',fn:(v)=>{const a=ga();[[659,0],[784,0.18],[987,0.36]].forEach(([f,t])=>bip(a,f,0.22,t,v));}},{id:'s4',name:'五音樂句',tag:'豐富',fn:(v)=>{const a=ga();[[523,0],[587,0.14],[659,0.28],[784,0.42],[1047,0.56]].forEach(([f,t])=>bip(a,f,0.16,t,v));}},{id:'s5',name:'電玩過關',tag:'活潑',fn:(v)=>{const a=ga();[[784,0],[784,0.1],[784,0.2],[659,0.3],[784,0.4]].forEach(([f,t])=>bip(a,f,0.09,t,v));}},{id:'s6',name:'柔和鐘聲',tag:'優雅',fn:(v)=>{const a=ga();[[523,0],[659,0.2],[783,0.4]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.8);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.9);});}},],
+const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w2',name:'三連嗶',tag:'清晰',fn:(v)=>{const a=ga();[[1000,0],[1000,0.2],[1000,0.4]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},{id:'w3',name:'上升嗶嗶',tag:'明顯',fn:(v)=>{const a=ga();[[800,0],[1000,0.22]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w4',name:'鐘聲單音',tag:'悠揚',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=987;g.gain.setValueAtTime(v*0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.3);}},{id:'w5',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'w6',name:'電子嗶聲',tag:'俐落',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='square';o.connect(g);g.connect(a.destination);o.frequency.value=750;g.gain.setValueAtTime(v*0.12,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+0.12);o.start();o.stop(a.currentTime+0.13);}}],danger:[{id:'dv1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakDangerOnce(v);}},{id:'d1',name:'急促雙音',tag:'緊急感',fn:(v)=>{const a=ga();[[1200,0],[900,0.15],[1200,0.3],[900,0.45]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'d2',name:'警報上升',tag:'強烈',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(800,a.currentTime);o.frequency.linearRampToValueAtTime(1400,a.currentTime+0.4);g.gain.setValueAtTime(v*0.28,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);o.start();o.stop(a.currentTime+0.5);}},{id:'d3',name:'快速三連',tag:'急促',fn:(v)=>{const a=ga();[[1100,0],[1100,0.13],[1100,0.26]].forEach(([f,t])=>bip(a,f,0.1,t,v));}},{id:'d4',name:'警笛短音',tag:'警示',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(1000,a.currentTime);o.frequency.setValueAtTime(1300,a.currentTime+0.1);o.frequency.setValueAtTime(1000,a.currentTime+0.2);g.gain.setValueAtTime(v*0.18,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.35);o.start();o.stop(a.currentTime+0.4);}},{id:'d5',name:'緊急嗶鳴',tag:'穿透',fn:(v)=>{const a=ga();[[1400,0],[1400,0.1],[1400,0.2],[1400,0.3]].forEach(([f,t])=>bip(a,f,0.07,t,v));}},{id:'d6',name:'雙頻交替',tag:'識別高',fn:(v)=>{const a=ga();[[900,0],[1300,0.18],[900,0.36],[1300,0.54]].forEach(([f,t])=>bip(a,f,0.14,t,v));}}],
+  thirty:[
+    {id:'t1',name:'單嗶提示',tag:'預設',fn:(v)=>{const a=ga();bip(a,1000,0.22,0,v);}},
+    {id:'t2',name:'快速雙嗶',tag:'清脆',fn:(v)=>{const a=ga();[[1000,0],[1200,0.15]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
+    {id:'t3',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},
+    {id:'tv1',name:'語音播報',tag:'語音',fn:(v)=>{speakTTS3x('時間差不多囉，請確認人員就位',v);}}
+  ],
+  success:[{id:'s1',name:'上升音階',tag:'歡樂',fn:(v)=>{const a=ga();[[523,0],[659,0.15],[784,0.3],[1047,0.45]].forEach(([f,t])=>bip(a,f,0.2,t,v));}},{id:'s2',name:'叮咚完成',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.2]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.6);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.7);});}},{id:'s3',name:'三音完成',tag:'溫和',fn:(v)=>{const a=ga();[[659,0],[784,0.18],[987,0.36]].forEach(([f,t])=>bip(a,f,0.22,t,v));}},{id:'s4',name:'五音樂句',tag:'豐富',fn:(v)=>{const a=ga();[[523,0],[587,0.14],[659,0.28],[784,0.42],[1047,0.56]].forEach(([f,t])=>bip(a,f,0.16,t,v));}},{id:'s5',name:'電玩過關',tag:'活潑',fn:(v)=>{const a=ga();[[784,0],[784,0.1],[784,0.2],[659,0.3],[784,0.4]].forEach(([f,t])=>bip(a,f,0.09,t,v));}},{id:'s6',name:'柔和鐘聲',tag:'優雅',fn:(v)=>{const a=ga();[[523,0],[659,0.2],[783,0.4]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.8);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.9);});}},],
   notify:[
     {id:'n1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則旅客引導訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}},
     {id:'n2',name:'單嗶提示音',tag:'簡短',fn:(v)=>{const a=ga();const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.setValueAtTime(v*0.25,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.start();o.stop(a.currentTime+0.45);}},
@@ -1648,7 +1655,7 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
     {id:'c3',name:'語音播報',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則新的對話訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}}
   ],
   bike_arrive:[
-    {id:'ba_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱票',v);}},
+    {id:'ba_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱紙',v);}},
     {id:'ba_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
     {id:'ba_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
   ],
@@ -1658,7 +1665,7 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
     {id:'bt_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
   ],
   group_arrive:[
-    {id:'ga_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有團體旅客將於本站下車，請準備回收感熱票',v);}},
+    {id:'ga_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有團體旅客將於本站下車，請準備回收感熱紙',v);}},
     {id:'ga_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
     {id:'ga_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
   ],
@@ -1677,6 +1684,7 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
 const SOUND_SECTIONS_CFG=[
   {k:'warn',   icon:'⚠️', label:'準備就緒提醒音（3分鐘警示）', desc:'倒數達3分鐘時觸發，循環直到確認'},
   {k:'danger', icon:'🚨', label:'緊急確認語音提示音（1分30秒警示）', desc:'倒數達90秒時觸發，循環直到確認（語音：引導旅客即將到站，請確認人員是否就定位）'},
+  {k:'thirty', icon:'⏱️', label:'時間差不多囉提醒音（30秒警示）', desc:'倒數達30秒時觸發，僅播放一次'},
   {k:'success',icon:'✅', label:'到站完成音',                  desc:'列車抵達時觸發，重複播放直到按下確認'},
   {k:'notify', icon:'📢', label:'收到引導訊息提醒音',           desc:'其他站新增引導事件、本站為迄站時觸發（語音播報3次）'},
   {k:'chat',   icon:'💬', label:'收到對話訊息提醒音',           desc:'對話牆收到新訊息時觸發'},
@@ -1689,6 +1697,7 @@ const SOUND_SECTIONS_CFG=[
 const SOUND_DEFAULTS={
   warn:   {type:'preset',id:'w1',name:'雙嗶提示'},
   danger: {type:'voice', id:'dv1',name:'語音播報'},
+  thirty: {type:'preset',id:'t1',name:'單嗶提示'},
   success:{type:'preset',id:'s1',name:'上升音階'},
   notify: {type:'voice', id:'v1',name:'語音播報'},
   chat:   {type:'preset',id:'c1',name:'輕快雙音'},
@@ -1701,6 +1710,7 @@ const SOUND_DEFAULTS={
 const SC={
   warn:   {current:{type:'preset',id:'w1',name:'雙嗶提示'},   vol:70},
   danger: {current:{type:'voice', id:'dv1',name:'語音播報'},  vol:80},
+  thirty: {current:{type:'preset',id:'t1',name:'單嗶提示'},   vol:100},
   success:{current:{type:'preset',id:'s1',name:'上升音階'},   vol:70},
   notify: {current:{type:'voice', id:'v1',name:'語音播報'},   vol:80},
   chat:   {current:{type:'preset',id:'c1',name:'輕快雙音'},   vol:70},
@@ -1765,6 +1775,7 @@ async function saveAllSound(silent){
   const data={
     warn:        {id:SC.warn.current.id,        type:SC.warn.current.type,        name:SC.warn.current.name,        vol:SC.warn.vol},
     danger:      {id:SC.danger.current.id,       type:SC.danger.current.type,      name:SC.danger.current.name,      vol:SC.danger.vol},
+    thirty:      {id:SC.thirty.current.id,       type:SC.thirty.current.type,      name:SC.thirty.current.name,      vol:SC.thirty.vol},
     success:     {id:SC.success.current.id,      type:SC.success.current.type,     name:SC.success.current.name,     vol:SC.success.vol},
     notify:      {id:SC.notify.current.id,       type:SC.notify.current.type,      name:SC.notify.current.name,      vol:SC.notify.vol},
     chat:        {id:SC.chat.current.id,         type:SC.chat.current.type,        name:SC.chat.current.name,        vol:SC.chat.vol},
@@ -2187,7 +2198,7 @@ function loadSoundSettings(){
   soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
     if(snap.exists()){
       const d=snap.data();
-      ['warn','danger','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
+      ['warn','danger','thirty','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
         if(d[k]){
           SC[k].current={type:d[k].type,id:d[k].id,name:d[k].name};
           SC[k].vol=typeof d[k].vol==='number'?d[k].vol:SC[k].vol;
@@ -2195,7 +2206,7 @@ function loadSoundSettings(){
       });
     }
     buildSound();
-    ['warn','danger','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
+    ['warn','danger','thirty','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
       const el=document.getElementById('svol-'+k);
       const lb=document.getElementById('svol-lbl-'+k);
       if(el)el.value=SC[k].vol;
@@ -2359,7 +2370,7 @@ async function updateEventInDb(id,data){
 async function deleteEventFromDb(id){
   try{await deleteDoc(doc(db,'events',id));}catch(e){console.error(e);}
 }
-const wF=new Set(),dF=new Set(),doF=new Set(),autoCloseF=new Set();
+const wF=new Set(),dF=new Set(),thF=new Set(),doF=new Set(),autoCloseF=new Set();
 /* ── 堆疊式通知卡片機制：每個事件獨立顯示、獨立音效、獨立結案 ── */
 const activeAlertCards=new Map();/* eventId -> {type,soundKey,intervalId,ttsLooping,ttsTimeout} */
 
@@ -2496,6 +2507,7 @@ function renderEvents(){
   el.innerHTML=[...filteredEvs].sort((a,b)=>a.departTime-b.departTime).map(ev=>{
     const isNotify=isNotifyEvent(ev.type);
     const isBike=ev.type==='自行車旅客';
+    const isTransit=isBike&&CU&&getIntermediateStations(ev.from,ev.to).includes(CU.station);
     const arrT=ev.arrivalTime||ev.departTime;
     const msArr=arrT-new Date();
     const clsArr=isNotify?'normal':(cdCls(msArr)==='danger'?'danger':cdCls(msArr)==='warn'?'warn':'normal');
@@ -2509,7 +2521,7 @@ function renderEvents(){
         '<div style="font-size:24px;font-weight:700;color:'+notifyColor+'">'+( ev.arrivalTimeStr||'—:—')+'</div>'+
         '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">迄站 '+SN[ev.to]+'</div>'+
         (isBike?'<div style="font-size:10px;color:'+notifyColor+';margin-top:5px;line-height:1.8">02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台<br>共'+bikeTotal+'台 · 剩餘'+bikeRemain+'台</div>':'')+
-        '<div style="margin-top:6px;display:inline-block;padding:2px 9px;border-radius:4px;background:'+notifyBg+';color:'+notifyColor+';font-size:11px;font-weight:600">回收感熱票</div>'+
+        '<div style="margin-top:6px;display:inline-block;padding:2px 9px;border-radius:4px;background:'+notifyBg+';color:'+notifyColor+';font-size:11px;font-weight:600">回收感熱紙</div>'+
       '</div>':
       '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
         '<div class="countdown-num '+clsArr+'" id="cd-'+ev.id+'">'+fmtCd(msArr)+'</div>'+
@@ -2528,6 +2540,7 @@ function renderEvents(){
     '</div>'+
     '<div class="event-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">'+
       '<span class="tag '+(TC[ev.type]||'tag-gray')+'">'+ev.type+'</span>'+
+      (isTransit?'<span class="tag tag-teal" style="border-style:dashed">途經本站</span>':'')+
       (isBike?'':'<span class="tag tag-gray">車組 '+(ev.trainGroup||'—')+'</span>')+
       '<span class="tag tag-gray">'+ev.gate+'</span>'+
       '<span class="tag tag-gray">'+ev.gender+'</span>'+
@@ -2769,10 +2782,12 @@ function tick(){
       if(card&&!isNotify)card.className='event-card '+(cls==='danger'?'danger':cls==='warn'?'warn':'normal');
     }
     const isMyArrival=CU&&CU.role!=='S'&&ev.to===CU.station;
-    /* 引導型事件：三階段提醒（3分/90秒/到站） */
+    /* 引導型事件：三階段提醒（3分/90秒/30秒/到站）*/
     if(!isNotify){
       if(ms<=180000&&ms>60000&&!wF.has(ev.id)){wF.add(ev.id);if(isMyArrival){showAlertCard(ev.id,'warn','⚠️','準備就緒提醒　距發車約 3 分鐘',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，已派員至指定地點</button>','warn');}}
       if(ms<=90000&&ms>0&&!dF.has(ev.id)){dF.add(ev.id);if(isMyArrival){showAlertCard(ev.id,'danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger');}}
+      /* 30秒警示：僅播放一次音效，不顯示卡片 */
+      if(ms<=30000&&ms>0&&!thF.has(ev.id)){thF.add(ev.id);if(isMyArrival)playCS('thirty');}
     }
     /* 到站：引導型與通知型分別呈現不同彈窗 */
     if(ms<=0&&!doF.has(ev.id)){
@@ -2780,9 +2795,9 @@ function tick(){
       if(isMyArrival){
         if(isNotify){
           showAlertCard(ev.id,'success',isBike?'🚲':'👥',
-            isBike?'自行車旅客到站　請回收感熱票':'團體旅客到站　請回收感熱票',
+            isBike?'自行車旅客到站　請回收感熱紙':'團體旅客到站　請回收感熱紙',
             aInfo(ev),'',
-            '<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishNotifyOk(this.dataset.id)"><i class="ti ti-check"></i> 已回收感熱票</button>',
+            '<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishNotifyOk(this.dataset.id)"><i class="ti ti-check"></i> 已回收感熱紙</button>',
             isBike?'bike_arrive':'group_arrive');
         } else {
           showAlertCard(ev.id,'success','✅','列車已到站',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishOk(this.dataset.id)"><i class="ti ti-check"></i> 已接到旅客</button><button class="btn" style="color:#E24B4A;border-color:#E24B4A;margin-left:8px" data-id="'+ev.id+'" onclick="finishFail(this.dataset.id)"><i class="ti ti-x"></i> 未接到旅客</button>','success');
@@ -2976,7 +2991,7 @@ const H26={'2026-1-1':'first','2026-2-14':'first','2026-2-15':'rest','2026-2-16'
 const CAL_CSS={weekday:'background:#E6F1FB;border:0.5px solid #B5D4F4;color:#0C447C',first:'background:#FAEEDA;border:0.5px solid #FAC775;color:#633806',rest:'background:#EAF3DE;border:0.5px solid #C0DD97;color:#3B6D11',special:'background:#EEEDFE;border:0.5px solid #AFA9EC;color:#3C3489',warning:'background:#FCEBEB;border:0.5px solid #F09595;color:#791F1F'};
 const CAL_LABELS={weekday:'平日版',first:'假期首日版',rest:'假期其餘日版',warning:'需上傳'};
 const CAL_BADGE={weekday:'background:#E6F1FB;color:#0C447C;border:0.5px solid #B5D4F4',first:'background:#FAEEDA;color:#633806;border:0.5px solid #FAC775',rest:'background:#EAF3DE;color:#3B6D11;border:0.5px solid #C0DD97',special:'background:#EEEDFE;color:#3C3489;border:0.5px solid #AFA9EC',warning:'background:#FCEBEB;color:#791F1F;border:0.5px solid #F09595'};
-let calOvr={},calYear=2026,calMonth=6,calEditKey=null,calEditSel=null,calEditSvId=null;
+let calOvr={},calYear=new Date().getFullYear(),calMonth=new Date().getMonth()+1,calEditKey=null,calEditSel=null,calEditSvId=null;
 
 let calUnsubscribe=null;
 function loadCalOvr(){
@@ -3188,15 +3203,15 @@ function getFilteredEvents(){
   if(!CU) return events;
   const mgmt=isMgmtUnit(CU.station);
   const myStation=CU.station;
-  /* 途經站自行車事件只顯示於 banner，不進主列表 */
+  /* 途經站自行車事件：全線模式顯示（方便識別），本站模式才排除至 banner */
   const excludeTransit=ev=>!(ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(myStation));
   if(mgmt){
-    if(eventFilter==='all') return events.filter(excludeTransit);
+    if(eventFilter==='all') return events; /* 全線：全部顯示 */
     if(eventFilter==='depart') return events.filter(ev=>ev.from===eventFilterDepart&&excludeTransit(ev));
     if(eventFilter==='arrive') return events.filter(ev=>ev.to===eventFilterArrive&&excludeTransit(ev));
     return events.filter(excludeTransit);
   }
-  if(eventFilter==='all') return events.filter(excludeTransit);
+  if(eventFilter==='all') return events; /* 全線：含途經自行車事件一起顯示 */
   if(eventFilter==='depart') return events.filter(ev=>ev.from===myStation&&excludeTransit(ev));
   if(eventFilter==='arrive') return events.filter(ev=>ev.to===myStation&&excludeTransit(ev));
   return events.filter(excludeTransit);
