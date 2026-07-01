@@ -634,10 +634,10 @@ input[type=range]{flex:1;accent-color:#378ADD}
     <div class="form-group"><div class="form-label">旅客類別 <span>*</span></div><select id="f-type" onchange="onTypeChange()"><option>視障旅客</option><option>年長旅客</option><option>輪椅旅客（攜帶輪椅）</option><option>輪椅旅客（協助駐留）</option><option>自行車旅客</option><option>團體旅客</option><option>其他</option></select></div>
     <div id="bike-count-wrap" style="display:none">
       <div class="form-row">
-        <div class="form-group"><div class="form-label">車門2 台數 <span>*</span></div><select id="f-bike2"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
-        <div class="form-group"><div class="form-label">車門9 台數 <span>*</span></div><select id="f-bike9"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
+        <div class="form-group"><div class="form-label">02車門 台數 <span>*</span></div><select id="f-bike2"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
+        <div class="form-group"><div class="form-label">09車門 台數 <span>*</span></div><select id="f-bike9"><option value="0">0 台</option><option value="1">1 台</option><option value="2" selected>2 台</option></select></div>
       </div>
-      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:-6px;margin-bottom:8px"><i class="ti ti-info-circle" style="font-size:12px"></i> 單列車最多 4 台（車門2及車門9各最多 2 台）</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;margin-bottom:10px"><i class="ti ti-info-circle" style="font-size:12px"></i> 單列車最多 4 台（02車門及09車門各最多 2 台）</div>
     </div>
     <div class="form-group" id="train-sel-wrap"><div class="form-label">班次選擇 <span>*</span></div><div class="next-trains"><div class="next-trains-title">系統自動帶入最近班次，可選擇其他班次：</div><div id="train-options"></div></div></div>
     <div class="section-divider">旅客外觀特徵（可選填）</div>
@@ -1521,6 +1521,8 @@ function speakTTS3x(msg,vol){
 function speakBikeArriveNotice(){speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱票',SC.bike_arrive.vol/100);}
 function speakBikeTransitNotice(){speakTTS3x('自行車旅客搭乘列車途經本站，車票販售前請注意自行車數量',SC.bike_transit.vol/100);}
 function speakGroupArriveNotice(){speakTTS3x('有團體旅客將於本站下車，請準備回收感熱票',SC.group_arrive.vol/100);}
+function speakBikeNotify(){speakTTS3x('您有一則自行車旅客搭乘通知',SC.bike_notify.vol/100);}
+function speakGroupNotify(){speakTTS3x('您有一則團體旅客搭乘通知',SC.group_notify.vol/100);}
 
 function renderTransitBanner(){
   const wrap=document.getElementById('transit-banner-wrap');if(!wrap||!CU)return;
@@ -1539,7 +1541,7 @@ function renderTransitBanner(){
       '<span style="color:#0E667A;font-weight:600">途經提醒</span>'+
       '<span style="color:#0E667A">'+SN[ev.from]+' → '+SN[ev.to]+'</span>'+
       '<span style="color:var(--color-text-secondary)">'+timeStr+'</span>'+
-      '<span style="background:#fff;border:1px solid #9AD8E8;border-radius:4px;padding:1px 8px;color:#0E667A;font-weight:600">門2: '+(ev.bikeDoor2||0)+'台 ／ 門9: '+(ev.bikeDoor9||0)+'台</span>'+
+      '<span style="background:#fff;border:1px solid #9AD8E8;border-radius:4px;padding:1px 8px;color:#0E667A;font-weight:600">02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台</span>'+
       '<span style="color:'+(remain>0?'#1D9E75':'#E24B4A')+';font-weight:600">剩餘 '+remain+' 台</span>'+
     '</div>';
   }).join('');
@@ -1592,6 +1594,16 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
     {id:'ga_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有團體旅客將於本站下車，請準備回收感熱票',v);}},
     {id:'ga_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
     {id:'ga_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ],
+  bike_notify:[
+    {id:'bn_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('您有一則自行車旅客搭乘通知',v);}},
+    {id:'bn_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
+    {id:'bn_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ],
+  group_notify:[
+    {id:'gn_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('您有一則團體旅客搭乘通知',v);}},
+    {id:'gn_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
+    {id:'gn_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
   ]};
 
 /* ══ 音效設定（新版） ══ */
@@ -1601,9 +1613,11 @@ const SOUND_SECTIONS_CFG=[
   {k:'success',icon:'✅', label:'到站完成音',                  desc:'列車抵達時觸發，重複播放直到按下確認'},
   {k:'notify', icon:'📢', label:'收到引導訊息提醒音',           desc:'其他站新增引導事件、本站為迄站時觸發（語音播報3次）'},
   {k:'chat',   icon:'💬', label:'收到對話訊息提醒音',           desc:'對話牆收到新訊息時觸發'},
-  {k:'bike_arrive',  icon:'🚲', label:'自行車旅客到站提醒音',      desc:'其他站新增自行車旅客事件、本站為迄站時觸發（語音播報3次）'},
-  {k:'bike_transit', icon:'🚴', label:'自行車旅客途經本站提醒音',  desc:'其他站新增自行車旅客事件、本站為途經站時觸發（語音播報3次）'},
-  {k:'group_arrive', icon:'👥', label:'團體旅客到站提醒音',        desc:'其他站新增團體旅客事件、本站為迄站時觸發（語音播報3次）'},
+  {k:'bike_arrive',  icon:'🚲', label:'自行車旅客到站提醒音',        desc:'自行車旅客抵達時觸發，（語音播報3次）'},
+  {k:'bike_transit', icon:'🚴', label:'自行車旅客途經本站提醒音',    desc:'其他站新增自行車旅客事件、本站為途經站時觸發（語音播報3次）'},
+  {k:'group_arrive', icon:'👥', label:'團體旅客到站提醒音',          desc:'團體旅客抵達時觸發，（語音播報3次）'},
+  {k:'bike_notify',  icon:'🔔', label:'收到自行車旅客訊息提醒音',   desc:'其他站新增自行車旅客事件、本站為迄站時觸發（語音播報3次）'},
+  {k:'group_notify', icon:'🔔', label:'收到團體旅客訊息提醒音',     desc:'其他站新增團體旅客事件、本站為迄站時觸發（語音播報3次）'},
 ];
 const SOUND_DEFAULTS={
   warn:   {type:'preset',id:'w1',name:'雙嗶提示'},
@@ -1614,6 +1628,8 @@ const SOUND_DEFAULTS={
   bike_arrive:  {type:'voice',id:'ba_v1',name:'語音播報'},
   bike_transit: {type:'voice',id:'bt_v1',name:'語音播報'},
   group_arrive: {type:'voice',id:'ga_v1',name:'語音播報'},
+  bike_notify:  {type:'voice',id:'bn_v1',name:'語音播報'},
+  group_notify: {type:'voice',id:'gn_v1',name:'語音播報'},
 };
 const SC={
   warn:   {current:{type:'preset',id:'w1',name:'雙嗶提示'},   vol:70},
@@ -1624,6 +1640,8 @@ const SC={
   bike_arrive:  {current:{type:'voice',id:'ba_v1',name:'語音播報'},vol:80},
   bike_transit: {current:{type:'voice',id:'bt_v1',name:'語音播報'},vol:80},
   group_arrive: {current:{type:'voice',id:'ga_v1',name:'語音播報'},vol:80},
+  bike_notify:  {current:{type:'voice',id:'bn_v1',name:'語音播報'},vol:80},
+  group_notify: {current:{type:'voice',id:'gn_v1',name:'語音播報'},vol:80},
 };
 let soundReplaceKey=null,soundReplaceSel=null,soundReplaceFile=null;
 let soundPlayingId=null,soundPlayInterval=null;
@@ -2097,7 +2115,7 @@ function loadSoundSettings(){
   soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
     if(snap.exists()){
       const d=snap.data();
-      ['warn','danger','success','notify','chat','bike_arrive','bike_transit','group_arrive'].forEach(k=>{
+      ['warn','danger','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
         if(d[k]){
           SC[k].current={type:d[k].type,id:d[k].id,name:d[k].name};
           SC[k].vol=typeof d[k].vol==='number'?d[k].vol:SC[k].vol;
@@ -2105,7 +2123,7 @@ function loadSoundSettings(){
       });
     }
     buildSound();
-    ['warn','danger','success','notify','chat','bike_arrive','bike_transit','group_arrive'].forEach(k=>{
+    ['warn','danger','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
       const el=document.getElementById('svol-'+k);
       const lb=document.getElementById('svol-lbl-'+k);
       if(el)el.value=SC[k].vol;
@@ -2118,6 +2136,8 @@ function playCurrentSoundCS(k){
   else if(k==='bike_arrive'&&SC.bike_arrive.current.type==='voice'){speakBikeArriveNotice();}
   else if(k==='bike_transit'&&SC.bike_transit.current.type==='voice'){speakBikeTransitNotice();}
   else if(k==='group_arrive'&&SC.group_arrive.current.type==='voice'){speakGroupArriveNotice();}
+  else if(k==='bike_notify'&&SC.bike_notify.current.type==='voice'){speakBikeNotify();}
+  else if(k==='group_notify'&&SC.group_notify.current.type==='voice'){speakGroupNotify();}
   else{playCS(k);}
 }
 
@@ -2219,8 +2239,9 @@ function startEventsListener(){
       incoming.forEach(ev=>{
         if(!knownEventIds.has(ev.id)){
           if(ev.to===CU.station){
-            if(ev.type==='自行車旅客') speakBikeArriveNotice();
-            else if(ev.type==='團體旅客') speakGroupArriveNotice();
+            /* 事件建立時：依類型播放對應的「收到訊息」提醒音 */
+            if(ev.type==='自行車旅客') speakBikeNotify();
+            else if(ev.type==='團體旅客') speakGroupNotify();
             else speakArrivalNotice();
           } else if(ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(CU.station)){
             speakBikeTransitNotice();
@@ -2406,7 +2427,7 @@ function renderEvents(){
         '<div style="font-size:11px;color:var(--color-text-secondary)">迄站到站時間</div>'+
         '<div style="font-size:24px;font-weight:700;color:'+notifyColor+'">'+( ev.arrivalTimeStr||'—:—')+'</div>'+
         '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">迄站 '+SN[ev.to]+'</div>'+
-        (isBike?'<div style="font-size:10px;color:'+notifyColor+';margin-top:5px;line-height:1.8">門2: '+(ev.bikeDoor2||0)+'台 ／ 門9: '+(ev.bikeDoor9||0)+'台<br>共'+bikeTotal+'台 · 剩餘'+bikeRemain+'台</div>':'')+
+        (isBike?'<div style="font-size:10px;color:'+notifyColor+';margin-top:5px;line-height:1.8">02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台<br>共'+bikeTotal+'台 · 剩餘'+bikeRemain+'台</div>':'')+
         '<div style="margin-top:6px;display:inline-block;padding:2px 9px;border-radius:4px;background:'+notifyBg+';color:'+notifyColor+';font-size:11px;font-weight:600">回收感熱票</div>'+
       '</div>':
       '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
@@ -3128,11 +3149,11 @@ Object.assign(window,{
   resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb,
   saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, sendChatMessage,
   setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol,
-  speakBikeArriveNotice, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice, speakTTS3x,
-  startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT,
-  switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye,
-  togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb,
-  updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice,
+  speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
+  submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall,
+  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateCalStep2, updateEventInDb,
+  updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
 });
 
 
