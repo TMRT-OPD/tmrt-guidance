@@ -82,10 +82,6 @@ body{font-family:var(--font-sans);background:var(--color-background-tertiary);ma
 .tag-gray{background:var(--color-background-secondary);color:var(--color-text-secondary);border-color:var(--color-border-secondary)}
 .tag-green{background:#EAF3DE;color:#3B6D11;border-color:#C0DD97}
 .tag-coral{background:#FAECE7;color:#993C1D;border-color:#F5C4B3}
-.tag-red{background:#FCEBEB;color:#A32D2D;border-color:#F7C1C1}
-.tag-amber{background:#FAEEDA;color:#633806;border-color:#FAC775}
-.tag-teal{background:#E0F3F7;color:#0E667A;border-color:#9AD8E8}
-.tag-purple{background:#F0EAFA;color:#6B3FA0;border-color:#C9AEED}
 .event-note{font-size:11px;color:var(--color-text-secondary);margin-bottom:5px;white-space:pre-line}
 .event-actions{display:flex;gap:4px;margin-top:5px}
 .event-meta{font-size:10px;color:var(--color-text-tertiary);margin-top:4px}
@@ -233,7 +229,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 /* ── 對話牆 ── */
 .chat-wall{position:fixed;right:16px;bottom:16px;width:25vw;min-width:300px;height:33vh;min-height:280px;max-width:90vw;max-height:90vh;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);background:rgba(255,255,255,0.35);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);overflow:hidden;z-index:50;display:flex;flex-direction:column;box-shadow:0 4px 24px rgba(0,0,0,.2)}
 @media (prefers-color-scheme:dark){.chat-wall{background:rgba(30,30,30,0.85)}}
-.chat-wall.collapsed{height:auto!important;min-height:0!important}
+.chat-wall.collapsed{height:auto!important}
 .chat-wall-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:rgba(0,0,0,0.06);flex-shrink:0;cursor:default}
 .chat-wall-body{display:flex;flex-direction:column;flex:1;min-height:0}
 .chat-wall.collapsed .chat-wall-body{display:none}
@@ -254,11 +250,10 @@ input[type=range]{flex:1;accent-color:#378ADD}
 .chat-input-row{display:flex;gap:6px;align-items:center}
 .chat-input-row input{flex:1;font-size:13px;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary)}
 .chat-emoji-btn{flex-shrink:0}
-.emoji-picker{position:fixed;height:320px;background:rgba(255,255,255,0.35);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
-@media (prefers-color-scheme:dark){.emoji-picker{background:rgba(30,30,30,0.85)}}
-.emoji-tabs{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);background:rgba(0,0,0,0.06);padding:0 10px;flex-shrink:0}
+.emoji-picker{position:fixed;height:320px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:100;display:flex;flex-direction:column}
+.emoji-tabs{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);padding:0 10px;flex-shrink:0}
 .emoji-tab-btn{font-size:13px;padding:10px 16px;border:none;background:none;cursor:pointer;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0}
-.emoji-tab-btn.active{color:#378ADD;font-weight:600;background:rgba(255,255,255,0.55);border-bottom:2px solid #378ADD;margin-bottom:-1px}
+.emoji-tab-btn.active{color:#378ADD;font-weight:600;background:var(--color-background-primary);border-bottom:2px solid #378ADD;margin-bottom:-1px}
 .emoji-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:10px;padding:18px;flex:1;overflow-y:auto;align-content:flex-start}
 .emoji-grid span{cursor:pointer;font-size:14px;padding:10px 2px;border-radius:8px;text-align:center;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:visible;min-width:0}
 .emoji-grid.emoji-tab-emoji span{font-size:28px;padding:10px 2px;line-height:1}
@@ -342,9 +337,9 @@ input[type=range]{flex:1;accent-color:#378ADD}
       <div id="last-login-ip">—</div>
     </div>
     <div class="nav-section">主要功能</div>
-    <div class="nav-item active" data-page="events" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-users"></i>即時引導事件</div>
+    <div class="nav-item" data-page="events" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-users"></i>即時引導事件</div>
     <div class="nav-item" data-page="history" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-history"></i>歷史查詢</div>
-    <div class="nav-item" data-page="guide" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-info-circle"></i>系統操作說明</div>
+    <div class="nav-item active" data-page="guide" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-info-circle"></i>系統操作說明</div>
     <div class="nav-section" data-min-role="A" style="display:none">管理</div>
     <div class="nav-item" data-page="timetable" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-calendar"></i>時刻表版次</div>
     <div class="nav-item" data-page="calendar" data-min-role="A" style="display:none" onclick="showPage(this);closeMobileMenu()"><i class="ti ti-calendar-event"></i>行事曆管理</div>
@@ -360,10 +355,9 @@ input[type=range]{flex:1;accent-color:#378ADD}
 <div class="main">
 
 <!-- 即時引導事件 -->
-<div class="page active" id="page-events">
+<div class="page" id="page-events">
   <div id="tt-banner-wrap"></div>
   <div id="suspend-overlay-wrap"></div>
-  <div id="transit-banner-wrap" style="display:none;margin-bottom:8px"></div>
   <div class="topbar">
     <div><div class="topbar-title">即時引導事件</div><div class="topbar-meta" id="clock-display">—</div></div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -413,7 +407,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
 </div>
 
 <!-- 系統操作說明 -->
-<div class="page" id="page-guide">
+<div class="page active" id="page-guide">
   <div class="topbar"><div class="topbar-title">系統操作說明</div></div>
   <div style="max-width:780px">
     <div style="background:linear-gradient(135deg,#2d6fb0,#378ADD);border-radius:var(--border-radius-lg);padding:20px 24px;margin-bottom:18px;color:#fff">
@@ -423,34 +417,34 @@ input[type=range]{flex:1;accent-color:#378ADD}
 
     <div style="display:flex;flex-direction:column;gap:12px">
 
-      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #378ADD;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #378ADD;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px;align-items:flex-start">
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-plug-connected-x"></i></div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#0c447c;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">系統定位</div>
+          <div style="font-size:13px;font-weight:600;color:#0c447c;margin-bottom:4px">系統定位</div>
           <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統因應號誌資安考量，未與行控中心 ATS 系統串接，所有班次資訊均參照行控中心公告之發車時刻表進行計算與顯示。</div>
         </div>
       </div>
 
-      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #EF9F27;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #EF9F27;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px;align-items:flex-start">
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#FAEEDA;color:#9a5b0a;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-clock-exclamation"></i></div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#9a5b0a;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">時間誤差提醒</div>
+          <div style="font-size:13px;font-weight:600;color:#9a5b0a;margin-bottom:4px">時間誤差提醒</div>
           <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">遇交通尖峰時段、列車臨時延靠等狀況，實際發車時間可能與系統顯示時間產生誤差，請提前至月台就定位，以免錯過列車。</div>
         </div>
       </div>
 
-      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #E24B4A;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #E24B4A;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px;align-items:flex-start">
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#FCEBEB;color:#A32D2D;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-alert-triangle"></i></div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#A32D2D;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">異常事件停用</div>
+          <div style="font-size:13px;font-weight:600;color:#A32D2D;margin-bottom:4px">異常事件停用</div>
           <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">如遇地震、強風、颱風、系統或設備異常等突發事件，本系統將暫停使用，請依現場廣播及行控中心指示處理。</div>
         </div>
       </div>
 
-      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #1D9E75;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid #1D9E75;border-radius:var(--border-radius-lg);padding:16px 18px;display:flex;gap:14px;align-items:flex-start">
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--border-radius-md);background:#EAF3DE;color:#3B6D11;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-tool"></i></div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#3B6D11;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px">輔助工具性質</div>
+          <div style="font-size:13px;font-weight:600;color:#3B6D11;margin-bottom:4px">輔助工具性質</div>
           <div style="font-size:13px;line-height:1.7;color:var(--color-text-primary)">本系統僅作為站務人員執行旅客引導作業之輔助工具，所有引導決策與現場應變仍應以實際情況及行控中心指示為準。</div>
         </div>
       </div>
@@ -631,15 +625,7 @@ input[type=range]{flex:1;accent-color:#378ADD}
       <div class="form-group"><div class="form-label">車門</div><select id="f-gate"><option>01 車門</option><option>02 車門</option><option>03 車門</option><option>04 車門</option><option>05 車門</option><option>06 車門</option><option>07 車門</option><option>08 車門</option><option>09 車門</option><option>10 車門</option></select></div>
       <div class="form-group"><div class="form-label">性別</div><select id="f-gender"><option>男性</option><option>女性</option></select></div>
     </div>
-    <div class="form-group"><div class="form-label">旅客類別 <span>*</span></div><select id="f-type" onchange="onTypeChange()"><option>視障旅客</option><option>年長旅客</option><option>輪椅旅客（攜帶輪椅）</option><option>輪椅旅客（協助駐留）</option><option>自行車旅客</option><option>團體旅客</option><option>其他</option></select></div>
-    <div id="bike-count-wrap" style="display:none">
-      <div class="form-row">
-        <div class="form-group"><div class="form-label">02車門 台數 <span>*</span></div><select id="f-bike2"><option value="0" selected>0 台</option><option value="1">1 台</option><option value="2">2 台</option></select></div>
-        <div class="form-group"><div class="form-label">09車門 台數 <span>*</span></div><select id="f-bike9"><option value="0" selected>0 台</option><option value="1">1 台</option><option value="2">2 台</option></select></div>
-      </div>
-      <div id="bike-cap-info" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;border-left:3px solid #E8861A;background:#FEF4D6;margin-bottom:8px;line-height:1.6"></div>
-      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;margin-bottom:10px"><i class="ti ti-info-circle" style="font-size:12px"></i> 單列車最多 4 台（02車門及09車門各最多 2 台）</div>
-    </div>
+    <div class="form-group"><div class="form-label">旅客類別 <span>*</span></div><select id="f-type"><option>視障旅客</option><option>年長旅客</option><option>輪椅旅客（攜帶輪椅）</option><option>輪椅旅客（協助駐留）</option><option>其他</option></select></div>
     <div class="form-group" id="train-sel-wrap"><div class="form-label">班次選擇 <span>*</span></div><div class="next-trains"><div class="next-trains-title">系統自動帶入最近班次，可選擇其他班次：</div><div id="train-options"></div></div></div>
     <div class="section-divider">旅客外觀特徵（可選填）</div>
     <div class="field-row"><span class="field-key">人數</span><input class="field-input" id="f-n1" type="text" placeholder="例：2人"></div>
@@ -1488,159 +1474,6 @@ function exportMonthReport(){
 }
 
 /* ── 語音通知（新增事件通知迄站） ── */
-/* ── 通知型事件輔助 ── */
-function isNotifyEvent(type){return NOTIFY_TYPES.includes(type);}
-function isBikeEvent(type){return type==='自行車旅客';}
-function getIntermediateStations(from,to){
-  const fi=STATION_ORDER_LIST.indexOf(from);
-  const ti=STATION_ORDER_LIST.indexOf(to);
-  if(fi<0||ti<0)return[];
-  const s=Math.min(fi,ti),e=Math.max(fi,ti);
-  return STATION_ORDER_LIST.slice(s+1,e);
-}
-function onTypeChange(){
-  const t=(document.getElementById('f-type')||{}).value||'';
-  const w=document.getElementById('bike-count-wrap');
-  const gate=document.getElementById('f-gate');
-  if(w)w.style.display=t==='自行車旅客'?'block':'none';
-  /* 自行車旅客固定使用 02/09 車門，停用一般車門選擇 */
-  if(gate){
-    gate.disabled=t==='自行車旅客';
-    gate.style.opacity=t==='自行車旅客'?'0.35':'1';
-    gate.style.cursor=t==='自行車旅客'?'not-allowed':'';
-  }
-  if(t==='自行車旅客') updateBikeCapacity();
-  else{const ci=document.getElementById('bike-cap-info');if(ci)ci.style.display='none';}
-}
-function updateBikeCapacity(){
-  if(!document.getElementById('f-type')||document.getElementById('f-type').value!=='自行車旅客')return;
-  const editId=(document.getElementById('f-edit-id')||{}).value||'';
-  const b2=document.getElementById('f-bike2'),b9=document.getElementById('f-bike9');
-  const ci=document.getElementById('bike-cap-info');
-  if(!b2||!b9)return;
-  const sel=document.querySelector('input[name="tsel"]:checked');
-  if(!sel){
-    [...b2.options].forEach(o=>o.disabled=false);
-    [...b9.options].forEach(o=>o.disabled=false);
-    if(ci)ci.style.display='none';
-    return;
-  }
-  const selTime=new Date(sel.value).getTime();
-  const dir=(document.getElementById('f-dir')||{}).value||'down';
-  const selArrival=sel.dataset.arr||''; /* 所選班次抵達迄站的時間 */
-  const selTo=document.getElementById('f-to').value||'';
-  /* 同班次判斷：優先用「迄站相同 + 到站時間相同」（不同起站但同一班車的情境）
-     若缺乏資料則回退到起站發車時間 ±5 分鐘 */
-  const sameTrain=events.filter(ev=>{
-    if(ev.id===editId)return false;
-    if(ev.type!=='自行車旅客')return false;
-    if(ev.dir!==dir)return false;
-    if(selArrival&&selTo&&ev.arrivalTimeStr&&ev.to){
-      return ev.to===selTo&&ev.arrivalTimeStr===selArrival;
-    }
-    return Math.abs(ev.departTime.getTime()-selTime)<300000;
-  });
-  const usedD2=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor2||0),0);
-  const usedD9=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor9||0),0);
-  const maxD2=Math.max(0,2-usedD2),maxD9=Math.max(0,2-usedD9);
-  /* 更新選項：超出上限者 disabled */
-  [...b2.options].forEach(o=>{
-    const v=parseInt(o.value);o.disabled=v>maxD2;
-    if(v>maxD2&&parseInt(b2.value)>maxD2)b2.value=String(maxD2);
-  });
-  [...b9.options].forEach(o=>{
-    const v=parseInt(o.value);o.disabled=v>maxD9;
-    if(v>maxD9&&parseInt(b9.value)>maxD9)b9.value=String(maxD9);
-  });
-  /* 容量提示 */
-  if(ci){
-    const total=usedD2+usedD9;
-    const isFull=total>=4;
-    if(total>0){
-      ci.style.display='block';
-      ci.style.borderLeftColor=isFull?'#E24B4A':'#E8861A';
-      ci.style.background=isFull?'#FCEBEB':'#FEF4D6';
-      ci.innerHTML='<i class="ti ti-alert-circle" style="color:'+(isFull?'#E24B4A':'#E8861A')+';font-size:12px"></i> '+
-        (isFull?'<strong>此班列車自行車已額滿（4台），無法繼續新增</strong>':'同班次已登記 '+total+' 台自行車')+
-        '<br><span style="color:var(--color-text-secondary)">02車門已登記 '+usedD2+' 台（剩餘 '+maxD2+' 台）／ 09車門已登記 '+usedD9+' 台（剩餘 '+maxD9+' 台）</span>';
-    } else {
-      ci.style.display='none';
-    }
-  }
-}
-function speakTTS3x(msg,vol){
-  if(!window.speechSynthesis)return;
-  let count=0;
-  function doSpeak(){
-    if(count>=3)return;
-    window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(msg);
-    u.lang='zh-TW';u.rate=0.9;u.volume=Math.min(1,Math.max(0,vol));
-    const vcs=window.speechSynthesis.getVoices();
-    const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));
-    if(pv)u.voice=pv;
-    u.onend=()=>{count++;setTimeout(doSpeak,700);};
-    window.speechSynthesis.speak(u);
-  }
-  doSpeak();
-}
-function speakBikeArriveNotice(){speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱紙',SC.bike_arrive.vol/100);}
-function speakBikeTransitNotice(){speakTTS3x('自行車旅客搭乘列車途經本站，車票販售前請注意自行車數量',SC.bike_transit.vol/100);}
-function speakGroupArriveNotice(){speakTTS3x('有團體旅客將於本站下車，請準備回收感熱紙',SC.group_arrive.vol/100);}
-function speakBikeNotify(){speakTTS3x('您有一則自行車旅客搭乘通知',SC.bike_notify.vol/100);}
-function speakGroupNotify(){speakTTS3x('您有一則團體旅客搭乘通知',SC.group_notify.vol/100);}
-
-function renderTransitBanner(){
-  const wrap=document.getElementById('transit-banner-wrap');if(!wrap||!CU)return;
-  const myStation=CU.station;
-  const now=new Date();
-  const transitEvs=events.filter(ev=>{
-    if(ev.type!=='自行車旅客')return false;
-    if(!getIntermediateStations(ev.from,ev.to).includes(myStation))return false;
-    /* 計算列車途經本站的預計時間，若已通過則自動隱藏 */
-    const meTimeStr=getArrivalTime(ev.from,ev.departTimeStr||'',myStation,ev.dir||'down');
-    if(meTimeStr){
-      const[h,m]=meTimeStr.split(':').map(Number);
-      const meTime=new Date(ev.departTime);
-      meTime.setHours(h<5?h+24:h,m,0,0);
-      if(h<5&&meTime<ev.departTime)meTime.setDate(meTime.getDate()+1);
-      if(now>=meTime)return false;/* 已途經，不顯示 */
-    }
-    return true;
-  });
-  if(!transitEvs.length){wrap.innerHTML='';wrap.style.display='none';return;}
-  wrap.style.display='flex';
-  wrap.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
-  wrap.innerHTML=transitEvs.sort((a,b)=>a.departTime-b.departTime).map(ev=>{
-    const total=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
-    const remain=4-total;
-    const arrT=ev.arrivalTime||ev.departTime;
-    const timeStr=ev.arrivalTimeStr||fmt(ev.departTime);
-    return '<div style="display:flex;align-items:center;gap:8px;background:#E0F3F7;border:1px dashed #9AD8E8;border-radius:8px;padding:8px 14px;font-size:12px">'+
-      '<span style="font-size:14px">🚲</span>'+
-      '<span style="color:#0E667A;font-weight:600">途經提醒</span>'+
-      '<span style="color:#0E667A">'+SN[ev.from]+' → '+SN[ev.to]+'</span>'+
-      '<span style="color:var(--color-text-secondary)">'+timeStr+'</span>'+
-      '<span style="background:#fff;border:1px solid #9AD8E8;border-radius:4px;padding:1px 8px;color:#0E667A;font-weight:600">02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台</span>'+
-      '<span style="color:'+(remain>0?'#1D9E75':'#E24B4A')+';font-weight:600">剩餘 '+remain+' 台</span>'+
-    '</div>';
-  }).join('');
-}
-
-function finishNotifyOk(id){
-  const ev=events.find(e=>e.id===id);
-  if(ev){
-    const now=new Date();
-    const mm=(now.getMonth()+1).toString().padStart(2,'0'),dd=now.getDate().toString().padStart(2,'0');
-    const hh=now.getHours().toString().padStart(2,'0'),mi=now.getMinutes().toString().padStart(2,'0');
-    addHistoryToDb({time:mm+'/'+dd+' '+hh+':'+mi,from:ev.from,to:ev.to,dir:ev.dir,type:ev.type,trainGroup:ev.trainGroup||'—',status:'完成',creator:ev.createdBy||'—',note:ev.note||'',reason:''});
-    addLog('edit','通知結案（已回收）'+ev.from+'→'+ev.to+' '+ev.type);
-    deleteEventFromDb(ev.id);
-    setTimeout(loadHistory,1000);
-  }
-  closeAlertCard(id);
-}
-
 function speakArrivalNotice(){
   speakArrivalNoticeVol(SC.notify.vol/100);
 }
@@ -1649,14 +1482,7 @@ function speakArrivalNotice(){
 let audioCtx=null;
 function ga(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
 function bip(a,f,dur,t,v){const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime((v||0.7)*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+dur);o.start(a.currentTime+t);o.stop(a.currentTime+t+dur+0.01);}
-const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w2',name:'三連嗶',tag:'清晰',fn:(v)=>{const a=ga();[[1000,0],[1000,0.2],[1000,0.4]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},{id:'w3',name:'上升嗶嗶',tag:'明顯',fn:(v)=>{const a=ga();[[800,0],[1000,0.22]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w4',name:'鐘聲單音',tag:'悠揚',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=987;g.gain.setValueAtTime(v*0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.3);}},{id:'w5',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'w6',name:'電子嗶聲',tag:'俐落',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='square';o.connect(g);g.connect(a.destination);o.frequency.value=750;g.gain.setValueAtTime(v*0.12,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+0.12);o.start();o.stop(a.currentTime+0.13);}}],danger:[{id:'dv1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakDangerOnce(v);}},{id:'d1',name:'急促雙音',tag:'緊急感',fn:(v)=>{const a=ga();[[1200,0],[900,0.15],[1200,0.3],[900,0.45]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'d2',name:'警報上升',tag:'強烈',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(800,a.currentTime);o.frequency.linearRampToValueAtTime(1400,a.currentTime+0.4);g.gain.setValueAtTime(v*0.28,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);o.start();o.stop(a.currentTime+0.5);}},{id:'d3',name:'快速三連',tag:'急促',fn:(v)=>{const a=ga();[[1100,0],[1100,0.13],[1100,0.26]].forEach(([f,t])=>bip(a,f,0.1,t,v));}},{id:'d4',name:'警笛短音',tag:'警示',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(1000,a.currentTime);o.frequency.setValueAtTime(1300,a.currentTime+0.1);o.frequency.setValueAtTime(1000,a.currentTime+0.2);g.gain.setValueAtTime(v*0.18,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.35);o.start();o.stop(a.currentTime+0.4);}},{id:'d5',name:'緊急嗶鳴',tag:'穿透',fn:(v)=>{const a=ga();[[1400,0],[1400,0.1],[1400,0.2],[1400,0.3]].forEach(([f,t])=>bip(a,f,0.07,t,v));}},{id:'d6',name:'雙頻交替',tag:'識別高',fn:(v)=>{const a=ga();[[900,0],[1300,0.18],[900,0.36],[1300,0.54]].forEach(([f,t])=>bip(a,f,0.14,t,v));}}],
-  thirty:[
-    {id:'t1',name:'單嗶提示',tag:'預設',fn:(v)=>{const a=ga();bip(a,1000,0.22,0,v);}},
-    {id:'t2',name:'快速雙嗶',tag:'清脆',fn:(v)=>{const a=ga();[[1000,0],[1200,0.15]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
-    {id:'t3',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},
-    {id:'tv1',name:'語音播報',tag:'語音',fn:(v)=>{speakTTS3x('時間差不多囉，請確認人員就位',v);}}
-  ],
-  success:[{id:'s1',name:'上升音階',tag:'歡樂',fn:(v)=>{const a=ga();[[523,0],[659,0.15],[784,0.3],[1047,0.45]].forEach(([f,t])=>bip(a,f,0.2,t,v));}},{id:'s2',name:'叮咚完成',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.2]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.6);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.7);});}},{id:'s3',name:'三音完成',tag:'溫和',fn:(v)=>{const a=ga();[[659,0],[784,0.18],[987,0.36]].forEach(([f,t])=>bip(a,f,0.22,t,v));}},{id:'s4',name:'五音樂句',tag:'豐富',fn:(v)=>{const a=ga();[[523,0],[587,0.14],[659,0.28],[784,0.42],[1047,0.56]].forEach(([f,t])=>bip(a,f,0.16,t,v));}},{id:'s5',name:'電玩過關',tag:'活潑',fn:(v)=>{const a=ga();[[784,0],[784,0.1],[784,0.2],[659,0.3],[784,0.4]].forEach(([f,t])=>bip(a,f,0.09,t,v));}},{id:'s6',name:'柔和鐘聲',tag:'優雅',fn:(v)=>{const a=ga();[[523,0],[659,0.2],[783,0.4]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.8);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.9);});}},],
+const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w2',name:'三連嗶',tag:'清晰',fn:(v)=>{const a=ga();[[1000,0],[1000,0.2],[1000,0.4]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},{id:'w3',name:'上升嗶嗶',tag:'明顯',fn:(v)=>{const a=ga();[[800,0],[1000,0.22]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w4',name:'鐘聲單音',tag:'悠揚',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=987;g.gain.setValueAtTime(v*0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.3);}},{id:'w5',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'w6',name:'電子嗶聲',tag:'俐落',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='square';o.connect(g);g.connect(a.destination);o.frequency.value=750;g.gain.setValueAtTime(v*0.12,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+0.12);o.start();o.stop(a.currentTime+0.13);}}],danger:[{id:'dv1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakDangerOnce(v);}},{id:'d1',name:'急促雙音',tag:'緊急感',fn:(v)=>{const a=ga();[[1200,0],[900,0.15],[1200,0.3],[900,0.45]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'d2',name:'警報上升',tag:'強烈',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(800,a.currentTime);o.frequency.linearRampToValueAtTime(1400,a.currentTime+0.4);g.gain.setValueAtTime(v*0.28,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);o.start();o.stop(a.currentTime+0.5);}},{id:'d3',name:'快速三連',tag:'急促',fn:(v)=>{const a=ga();[[1100,0],[1100,0.13],[1100,0.26]].forEach(([f,t])=>bip(a,f,0.1,t,v));}},{id:'d4',name:'警笛短音',tag:'警示',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(1000,a.currentTime);o.frequency.setValueAtTime(1300,a.currentTime+0.1);o.frequency.setValueAtTime(1000,a.currentTime+0.2);g.gain.setValueAtTime(v*0.18,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.35);o.start();o.stop(a.currentTime+0.4);}},{id:'d5',name:'緊急嗶鳴',tag:'穿透',fn:(v)=>{const a=ga();[[1400,0],[1400,0.1],[1400,0.2],[1400,0.3]].forEach(([f,t])=>bip(a,f,0.07,t,v));}},{id:'d6',name:'雙頻交替',tag:'識別高',fn:(v)=>{const a=ga();[[900,0],[1300,0.18],[900,0.36],[1300,0.54]].forEach(([f,t])=>bip(a,f,0.14,t,v));}}],success:[{id:'s1',name:'上升音階',tag:'歡樂',fn:(v)=>{const a=ga();[[523,0],[659,0.15],[784,0.3],[1047,0.45]].forEach(([f,t])=>bip(a,f,0.2,t,v));}},{id:'s2',name:'叮咚完成',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.2]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.6);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.7);});}},{id:'s3',name:'三音完成',tag:'溫和',fn:(v)=>{const a=ga();[[659,0],[784,0.18],[987,0.36]].forEach(([f,t])=>bip(a,f,0.22,t,v));}},{id:'s4',name:'五音樂句',tag:'豐富',fn:(v)=>{const a=ga();[[523,0],[587,0.14],[659,0.28],[784,0.42],[1047,0.56]].forEach(([f,t])=>bip(a,f,0.16,t,v));}},{id:'s5',name:'電玩過關',tag:'活潑',fn:(v)=>{const a=ga();[[784,0],[784,0.1],[784,0.2],[659,0.3],[784,0.4]].forEach(([f,t])=>bip(a,f,0.09,t,v));}},{id:'s6',name:'柔和鐘聲',tag:'優雅',fn:(v)=>{const a=ga();[[523,0],[659,0.2],[783,0.4]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.8);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.9);});}},],
   notify:[
     {id:'n1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則旅客引導訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}},
     {id:'n2',name:'單嗶提示音',tag:'簡短',fn:(v)=>{const a=ga();const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.setValueAtTime(v*0.25,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.start();o.stop(a.currentTime+0.45);}},
@@ -1666,72 +1492,29 @@ const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=
     {id:'c1',name:'輕快雙音',tag:'預設',fn:(v)=>{const a=ga();[[700,0],[950,0.16]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},
     {id:'c2',name:'氣泡音',tag:'柔和',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(600,a.currentTime);o.frequency.exponentialRampToValueAtTime(900,a.currentTime+0.15);g.gain.setValueAtTime(v*0.2,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.3);o.start();o.stop(a.currentTime+0.35);}},
     {id:'c3',name:'語音播報',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則新的對話訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}}
-  ],
-  bike_arrive:[
-    {id:'ba_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱紙',v);}},
-    {id:'ba_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
-    {id:'ba_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
-  ],
-  bike_transit:[
-    {id:'bt_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('自行車旅客搭乘列車途經本站，車票販售前請注意自行車數量',v);}},
-    {id:'bt_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[700,0],[700,0.2]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},
-    {id:'bt_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
-  ],
-  group_arrive:[
-    {id:'ga_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有團體旅客將於本站下車，請準備回收感熱紙',v);}},
-    {id:'ga_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
-    {id:'ga_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
-  ],
-  bike_notify:[
-    {id:'bn_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('您有一則自行車旅客搭乘通知',v);}},
-    {id:'bn_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
-    {id:'bn_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
-  ],
-  group_notify:[
-    {id:'gn_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('您有一則團體旅客搭乘通知',v);}},
-    {id:'gn_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
-    {id:'gn_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
   ]};
 
 /* ══ 音效設定（新版） ══ */
 const SOUND_SECTIONS_CFG=[
   {k:'warn',   icon:'⚠️', label:'準備就緒提醒音（3分鐘警示）', desc:'倒數達3分鐘時觸發，循環直到確認'},
   {k:'danger', icon:'🚨', label:'緊急確認語音提示音（1分30秒警示）', desc:'倒數達90秒時觸發，循環直到確認（語音：引導旅客即將到站，請確認人員是否就定位）'},
-  {k:'thirty', icon:'⏱️', label:'時間差不多囉提醒音（30秒警示）', desc:'倒數達30秒時觸發，僅播放一次'},
   {k:'success',icon:'✅', label:'到站完成音',                  desc:'列車抵達時觸發，重複播放直到按下確認'},
   {k:'notify', icon:'📢', label:'收到引導訊息提醒音',           desc:'其他站新增引導事件、本站為迄站時觸發（語音播報3次）'},
   {k:'chat',   icon:'💬', label:'收到對話訊息提醒音',           desc:'對話牆收到新訊息時觸發'},
-  {k:'bike_arrive',  icon:'🚲', label:'自行車旅客到站提醒音',        desc:'自行車旅客抵達時觸發，（語音播報3次）'},
-  {k:'bike_transit', icon:'🚴', label:'自行車旅客途經本站提醒音',    desc:'其他站新增自行車旅客事件、本站為途經站時觸發（語音播報3次）'},
-  {k:'group_arrive', icon:'👥', label:'團體旅客到站提醒音',          desc:'團體旅客抵達時觸發，（語音播報3次）'},
-  {k:'bike_notify',  icon:'🔔', label:'收到自行車旅客訊息提醒音',   desc:'其他站新增自行車旅客事件、本站為迄站時觸發（語音播報3次）'},
-  {k:'group_notify', icon:'🔔', label:'收到團體旅客訊息提醒音',     desc:'其他站新增團體旅客事件、本站為迄站時觸發（語音播報3次）'},
 ];
 const SOUND_DEFAULTS={
   warn:   {type:'preset',id:'w1',name:'雙嗶提示'},
   danger: {type:'voice', id:'dv1',name:'語音播報'},
-  thirty: {type:'preset',id:'t1',name:'單嗶提示'},
   success:{type:'preset',id:'s1',name:'上升音階'},
   notify: {type:'voice', id:'v1',name:'語音播報'},
   chat:   {type:'preset',id:'c1',name:'輕快雙音'},
-  bike_arrive:  {type:'voice',id:'ba_v1',name:'語音播報'},
-  bike_transit: {type:'voice',id:'bt_v1',name:'語音播報'},
-  group_arrive: {type:'voice',id:'ga_v1',name:'語音播報'},
-  bike_notify:  {type:'voice',id:'bn_v1',name:'語音播報'},
-  group_notify: {type:'voice',id:'gn_v1',name:'語音播報'},
 };
 const SC={
   warn:   {current:{type:'preset',id:'w1',name:'雙嗶提示'},   vol:70},
   danger: {current:{type:'voice', id:'dv1',name:'語音播報'},  vol:80},
-  thirty: {current:{type:'preset',id:'t1',name:'單嗶提示'},   vol:100},
   success:{current:{type:'preset',id:'s1',name:'上升音階'},   vol:70},
   notify: {current:{type:'voice', id:'v1',name:'語音播報'},   vol:80},
   chat:   {current:{type:'preset',id:'c1',name:'輕快雙音'},   vol:70},
-  bike_arrive:  {current:{type:'voice',id:'ba_v1',name:'語音播報'},vol:80},
-  bike_transit: {current:{type:'voice',id:'bt_v1',name:'語音播報'},vol:80},
-  group_arrive: {current:{type:'voice',id:'ga_v1',name:'語音播報'},vol:80},
-  bike_notify:  {current:{type:'voice',id:'bn_v1',name:'語音播報'},vol:80},
-  group_notify: {current:{type:'voice',id:'gn_v1',name:'語音播報'},vol:80},
 };
 let soundReplaceKey=null,soundReplaceSel=null,soundReplaceFile=null;
 let soundPlayingId=null,soundPlayInterval=null;
@@ -1786,17 +1569,11 @@ function updateSoundVol(k,val){
 async function saveAllSound(silent){
   if(!CU)return;
   const data={
-    warn:        {id:SC.warn.current.id,        type:SC.warn.current.type,        name:SC.warn.current.name,        vol:SC.warn.vol},
-    danger:      {id:SC.danger.current.id,       type:SC.danger.current.type,      name:SC.danger.current.name,      vol:SC.danger.vol},
-    thirty:      {id:SC.thirty.current.id,       type:SC.thirty.current.type,      name:SC.thirty.current.name,      vol:SC.thirty.vol},
-    success:     {id:SC.success.current.id,      type:SC.success.current.type,     name:SC.success.current.name,     vol:SC.success.vol},
-    notify:      {id:SC.notify.current.id,       type:SC.notify.current.type,      name:SC.notify.current.name,      vol:SC.notify.vol},
-    chat:        {id:SC.chat.current.id,         type:SC.chat.current.type,        name:SC.chat.current.name,        vol:SC.chat.vol},
-    bike_arrive: {id:SC.bike_arrive.current.id,  type:SC.bike_arrive.current.type, name:SC.bike_arrive.current.name, vol:SC.bike_arrive.vol},
-    bike_transit:{id:SC.bike_transit.current.id, type:SC.bike_transit.current.type,name:SC.bike_transit.current.name,vol:SC.bike_transit.vol},
-    group_arrive:{id:SC.group_arrive.current.id, type:SC.group_arrive.current.type,name:SC.group_arrive.current.name,vol:SC.group_arrive.vol},
-    bike_notify: {id:SC.bike_notify.current.id,  type:SC.bike_notify.current.type, name:SC.bike_notify.current.name, vol:SC.bike_notify.vol},
-    group_notify:{id:SC.group_notify.current.id, type:SC.group_notify.current.type,name:SC.group_notify.current.name,vol:SC.group_notify.vol},
+    warn: {id:SC.warn.current.id,type:SC.warn.current.type,name:SC.warn.current.name,vol:SC.warn.vol},
+    danger:{id:SC.danger.current.id,type:SC.danger.current.type,name:SC.danger.current.name,vol:SC.danger.vol},
+    success:{id:SC.success.current.id,type:SC.success.current.type,name:SC.success.current.name,vol:SC.success.vol},
+    notify:{id:SC.notify.current.id,type:SC.notify.current.type,name:SC.notify.current.name,vol:SC.notify.vol},
+    chat:{id:SC.chat.current.id,type:SC.chat.current.type,name:SC.chat.current.name,vol:SC.chat.vol},
     by:CU.username+'·'+CU.name,
     at:new Date(),
   };
@@ -1919,12 +1696,6 @@ function toggleChatWall(){
   if(btn)btn.innerHTML='<i class="ti ti-chevron-'+(chatWallCollapsed?'up':'down')+'"></i>';
 }
 
-/* 對話牆寬度上限：不得超出主內容區（.main）左邊界，避免蓋住左側功能欄 */
-function getChatWallMaxWidth(){
-  const main=document.querySelector('.main');
-  const mainLeft=main?main.getBoundingClientRect().left:0;
-  return Math.max(300,Math.min(window.innerWidth*0.9,window.innerWidth-mainLeft-32));
-}
 /* 拖動左上角把手調整對話牆寬高（貼右下角，拖動把手往左上拉=放大）*/
 (function initChatResize(){
   const handle=document.getElementById('chat-resize-handle');
@@ -1940,7 +1711,7 @@ function getChatWallMaxWidth(){
   document.addEventListener('mousemove',e=>{
     if(!resizing)return;
     const dx=startX-e.clientX,dy=startY-e.clientY;
-    const newW=Math.min(Math.max(startW+dx,300),getChatWallMaxWidth());
+    const newW=Math.min(Math.max(startW+dx,300),window.innerWidth*0.9);
     const newH=Math.min(Math.max(startH+dy,280),window.innerHeight*0.9);
     wall.style.width=newW+'px';
     wall.style.height=newH+'px';
@@ -1950,12 +1721,6 @@ function getChatWallMaxWidth(){
   });
   document.addEventListener('mouseup',()=>{resizing=false;});
 })();
-window.addEventListener('resize',()=>{
-  const wall=document.getElementById('chat-wall');
-  if(!wall||!wall.style.width)return;
-  const maxW=getChatWallMaxWidth();
-  if(parseFloat(wall.style.width)>maxW)wall.style.width=maxW+'px';
-});
 
 let emojiPickerOutsideBound=false;
 function getEmojiPickerLeftBound(){
@@ -2211,7 +1976,7 @@ function loadSoundSettings(){
   soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
     if(snap.exists()){
       const d=snap.data();
-      ['warn','danger','thirty','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
+      ['warn','danger','success','notify','chat'].forEach(k=>{
         if(d[k]){
           SC[k].current={type:d[k].type,id:d[k].id,name:d[k].name};
           SC[k].vol=typeof d[k].vol==='number'?d[k].vol:SC[k].vol;
@@ -2219,7 +1984,7 @@ function loadSoundSettings(){
       });
     }
     buildSound();
-    ['warn','danger','thirty','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
+    ['warn','danger','success','notify','chat'].forEach(k=>{
       const el=document.getElementById('svol-'+k);
       const lb=document.getElementById('svol-lbl-'+k);
       if(el)el.value=SC[k].vol;
@@ -2227,15 +1992,7 @@ function loadSoundSettings(){
     });
   },e=>console.error('音效設定監聽失敗',e));
 }
-function playCurrentSoundCS(k){
-  if(k==='danger'&&SC.danger.current.type==='voice'){speakDangerPreview();}
-  else if(k==='bike_arrive'&&SC.bike_arrive.current.type==='voice'){speakBikeArriveNotice();}
-  else if(k==='bike_transit'&&SC.bike_transit.current.type==='voice'){speakBikeTransitNotice();}
-  else if(k==='group_arrive'&&SC.group_arrive.current.type==='voice'){speakGroupArriveNotice();}
-  else if(k==='bike_notify'&&SC.bike_notify.current.type==='voice'){speakBikeNotify();}
-  else if(k==='group_notify'&&SC.group_notify.current.type==='voice'){speakGroupNotify();}
-  else{playCS(k);}
-}
+function playCurrentSoundCS(k){if(k==='danger'&&SC.danger.current.type==='voice'){speakDangerPreview();}else{playCS(k);}}
 
 function openSoundReplace(k){
   soundReplaceKey=k;soundReplaceSel=SC[k].current.type==='preset'?SC[k].current.id:null;soundReplaceFile=null;
@@ -2307,9 +2064,7 @@ async function confirmSoundReplace(){
 function fmt(dt){return dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');}
 function fmtCd(ms){if(ms<=0)return'00:00';const s=Math.floor(ms/1000),m=Math.floor(s/60);return m.toString().padStart(2,'0')+':'+(s%60).toString().padStart(2,'0');}
 function cdCls(ms){if(ms<=90000)return'danger';if(ms<=180000)return'warn';return'normal';}
-const NOTIFY_TYPES=['自行車旅客','團體旅客'];
-const STATION_ORDER_LIST=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
-const TC={'視障旅客':'tag-red','年長旅客':'tag-amber','輪椅旅客（攜帶輪椅）':'tag-green','輪椅旅客（協助駐留）':'tag-green','自行車旅客':'tag-teal','團體旅客':'tag-purple','其他':'tag-gray'};
+const TC={'視障旅客':'tag-blue','年長旅客':'tag-coral','輪椅旅客（攜帶輪椅）':'tag-green','輪椅旅客（協助駐留）':'tag-green','其他':'tag-gray'};
 let events=[];
 let nextId=1;
 let eventsUnsubscribe=null;
@@ -2333,15 +2088,8 @@ function startEventsListener(){
     /* 偵測新進事件（已初始化後才判斷，避免登入時全部觸發） */
     if(eventsInitialized&&CU&&CU.role!=='S'){
       incoming.forEach(ev=>{
-        if(!knownEventIds.has(ev.id)){
-          if(ev.to===CU.station){
-            /* 事件建立時：依類型播放對應的「收到訊息」提醒音 */
-            if(ev.type==='自行車旅客') speakBikeNotify();
-            else if(ev.type==='團體旅客') speakGroupNotify();
-            else speakArrivalNotice();
-          } else if(ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(CU.station)){
-            speakBikeTransitNotice();
-          }
+        if(!knownEventIds.has(ev.id)&&ev.to===CU.station){
+          speakArrivalNotice();
         }
       });
     }
@@ -2383,7 +2131,7 @@ async function updateEventInDb(id,data){
 async function deleteEventFromDb(id){
   try{await deleteDoc(doc(db,'events',id));}catch(e){console.error(e);}
 }
-const wF=new Set(),dF=new Set(),thF=new Set(),doF=new Set(),autoCloseF=new Set();
+const wF=new Set(),dF=new Set(),doF=new Set(),autoCloseF=new Set();
 /* ── 堆疊式通知卡片機制：每個事件獨立顯示、獨立音效、獨立結案 ── */
 const activeAlertCards=new Map();/* eventId -> {type,soundKey,intervalId,ttsLooping,ttsTimeout} */
 
@@ -2412,19 +2160,10 @@ function startCardLoop(eventId,soundKey){
   stopCardLoop(eventId);
   const a=activeAlertCards.get(eventId);
   if(!a)return;
-  /* danger TTS：遞迴循環直到確認 */
   if(soundKey==='danger'&&SC.danger.current.type==='voice'){
     a.ttsLooping=true;
     speakDangerForCard(eventId);
-  /* bike_arrive / group_arrive TTS：speakTTS3x 內部已處理 3 次，不能再走 700ms 迴圈
-     否則 window.speechSynthesis.cancel() 會在每 700ms 時打斷語音 */
-  } else if(soundKey==='bike_arrive'){
-    if(SC.bike_arrive.current.type==='voice') speakBikeArriveNotice();
-    else{playCS(soundKey);a.intervalId=setInterval(()=>playCS(soundKey),700);}
-  } else if(soundKey==='group_arrive'){
-    if(SC.group_arrive.current.type==='voice') speakGroupArriveNotice();
-    else{playCS(soundKey);a.intervalId=setInterval(()=>playCS(soundKey),700);}
-  } else if(soundKey){
+  } else {
     playCS(soundKey);
     a.intervalId=setInterval(()=>playCS(soundKey),700);
   }
@@ -2515,37 +2254,14 @@ function buildNote(){const p=[];[['人數','f-n1'],['陪同者','f-n2'],['上衣
 function parseNote(note){const lm={'人數':'f-n1','陪同者':'f-n2','上衣顏色':'f-n3','褲／裙顏色':'f-n4','其他特徵':'f-n5'};Object.values(lm).forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});if(!note)return;note.split('\n').forEach(line=>{const m=line.match(/^(.+?)：(.*)$/);if(m&&lm[m[1]]){const el=document.getElementById(lm[m[1]]);if(el)el.value=m[2];}});}
 function renderEvents(){
   const el=document.getElementById('event-list');if(!el)return;
-  renderTransitBanner();
   const filteredEvs=getFilteredEvents();if(!filteredEvs.length){el.innerHTML='<div class="empty-state"><i class="ti ti-mood-happy"></i>目前無進行中的引導事件</div>';return;}
-  el.innerHTML=[...filteredEvs].sort((a,b)=>a.departTime-b.departTime).map(ev=>{
-    const isNotify=isNotifyEvent(ev.type);
-    const isBike=ev.type==='自行車旅客';
-    const isTransit=isBike&&CU&&getIntermediateStations(ev.from,ev.to).includes(CU.station);
-    const arrT=ev.arrivalTime||ev.departTime;
+  el.innerHTML=[...filteredEvs].sort((a,b)=>a.departTime-b.departTime).map(ev=>{const ms=ev.departTime-new Date(),cls=cdCls(ms),cc=cls==='danger'?'danger':cls==='warn'?'warn':'normal';const arrT=ev.arrivalTime||ev.departTime;
     const msArr=arrT-new Date();
-    const clsArr=isNotify?'normal':(cdCls(msArr)==='danger'?'danger':cdCls(msArr)==='warn'?'warn':'normal');
-    const bikeTotal=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
-    const bikeRemain=4-bikeTotal;
-    const notifyColor=isBike?'#0E667A':'#6B3FA0';
-    const notifyBg=isBike?'#E0F3F7':'#F0EAFA';
-    const rightSide=isNotify?
-      '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
-        '<div style="font-size:11px;color:var(--color-text-secondary)">迄站到站時間</div>'+
-        '<div style="font-size:24px;font-weight:700;color:'+notifyColor+'">'+( ev.arrivalTimeStr||'—:—')+'</div>'+
-        '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">迄站 '+SN[ev.to]+'</div>'+
-        (isBike?'<div style="font-size:10px;color:'+notifyColor+';margin-top:5px;line-height:1.8">02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台<br>共'+bikeTotal+'台 · 剩餘'+bikeRemain+'台</div>':'')+
-        '<div style="margin-top:6px;display:inline-block;padding:2px 9px;border-radius:4px;background:'+notifyBg+';color:'+notifyColor+';font-size:11px;font-weight:600">回收感熱紙</div>'+
-      '</div>':
-      '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
-        '<div class="countdown-num '+clsArr+'" id="cd-'+ev.id+'">'+fmtCd(msArr)+'</div>'+
-        '<div class="countdown-label">迄站發車倒數</div>'+
-        '<div style="margin-top:6px;font-size:10px;line-height:1.9;font-family:monospace">'+
-          '<div style="color:var(--color-text-secondary)">起站 <span style="display:inline-block;width:5em">'+SN[ev.from]+'</span> '+fmt(ev.departTime)+' 發車</div>'+
-          (ev.arrivalTimeStr?'<div style="color:#1D9E75;font-weight:600">迄站 <span style="display:inline-block;width:5em">'+SN[ev.to]+'</span> '+ev.arrivalTimeStr+' 發車</div>':'<div style="color:var(--color-text-tertiary)">迄站時間計算中</div>')+
-        '</div>'+
-      '</div>';
+    const clsArr=cdCls(msArr);
+    const ccArr=clsArr==='danger'?'danger':clsArr==='warn'?'warn':'normal';
+    const departInfo='<div style="font-size:10px;color:var(--color-text-secondary);margin-top:3px">起站 '+SN[ev.from]+' '+fmt(ev.departTime)+' 發車</div>'+(ev.arrivalTimeStr?'<div style="font-size:10px;color:#1D9E75;font-weight:500">迄站 '+SN[ev.to]+' '+(ev.arrivalTimeStr)+' 發車</div>':'');
     return(
-  '<div class="event-card '+clsArr+'" id="card-'+ev.id+'" style="display:grid;grid-template-columns:1fr 160px;align-items:center;gap:12px">'+
+  '<div class="event-card '+ccArr+'" id="card-'+ev.id+'" style="display:grid;grid-template-columns:1fr 160px;align-items:center;gap:12px">'+
   '<div class="event-info" style="min-width:0">'+
     '<div class="event-route" style="font-size:14px;font-weight:600;margin-bottom:5px">'+
       ev.from+' '+SN[ev.from]+' → '+ev.to+' '+SN[ev.to]+
@@ -2553,8 +2269,7 @@ function renderEvents(){
     '</div>'+
     '<div class="event-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">'+
       '<span class="tag '+(TC[ev.type]||'tag-gray')+'">'+ev.type+'</span>'+
-      (isTransit?'<span class="tag tag-teal" style="border-style:dashed">途經本站</span>':'')+
-      (isBike?'':'<span class="tag tag-gray">車組 '+(ev.trainGroup||'—')+'</span>')+
+      '<span class="tag tag-gray">車組 '+(ev.trainGroup||'—')+'</span>'+
       '<span class="tag tag-gray">'+ev.gate+'</span>'+
       '<span class="tag tag-gray">'+ev.gender+'</span>'+
     '</div>'+
@@ -2565,7 +2280,14 @@ function renderEvents(){
       '<span style="font-size:10px;color:var(--color-text-tertiary)">建立者：'+ev.createdBy+'</span>'+
     '</div>'+
   '</div>'+
-  rightSide+
+  '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
+    '<div class="countdown-num '+clsArr+'" id="cd-'+ev.id+'">'+fmtCd(msArr)+'</div>'+
+    '<div class="countdown-label">迄站發車倒數</div>'+
+    '<div style="margin-top:6px;font-size:10px;line-height:1.9;font-family:monospace">'+
+      '<div style="color:var(--color-text-secondary)">起站 <span style="display:inline-block;width:5em">'+SN[ev.from]+'</span> '+fmt(ev.departTime)+' 發車</div>'+
+      (ev.arrivalTimeStr?'<div style="color:#1D9E75;font-weight:600">迄站 <span style="display:inline-block;width:5em">'+SN[ev.to]+'</span> '+ev.arrivalTimeStr+' 發車</div>':'<div style="color:var(--color-text-tertiary)">迄站時間計算中</div>')+
+    '</div>'+
+  '</div>'+
 '</div>'
 );}).join('');
 }
@@ -2693,7 +2415,7 @@ function updateTrains(){
     const departStr=dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
     const arrStr=getArrivalTime(st,departStr,to,dir);
     const arrInfo=arrStr?'<span style="font-size:10px;color:#1D9E75;margin-left:6px">→ '+SN[to]+'站 '+arrStr+' 到站</span>':'';
-    return '<label class="train-option '+(i===0?'selected':'')+'"><input type="radio" name="tsel" value="'+dt.toISOString()+'" data-depart="'+departStr+'" data-arr="'+(arrStr||'')+'" '+(i===0?'checked':'')+' onchange="this.closest(\'.next-trains\').querySelectorAll(\'.train-option\').forEach(x=>x.classList.remove(\'selected\'));this.closest(\'.train-option\').classList.add(\'selected\');updateBikeCapacity();">'+fmt(dt)+' 發車'+(i===0?' <span style="font-size:10px;color:#0c447c">（下一班）</span>':'')+(arrInfo?arrInfo:'')+'</label>';
+    return '<label class="train-option '+(i===0?'selected':'')+'"><input type="radio" name="tsel" value="'+dt.toISOString()+'" data-depart="'+departStr+'" data-arr="'+(arrStr||'')+'" '+(i===0?'checked':'')+' onchange="this.closest(\'.next-trains\').querySelectorAll(\'.train-option\').forEach(x=>x.classList.remove(\'selected\'));this.closest(\'.train-option\').classList.add(\'selected\');">'+fmt(dt)+' 發車'+(i===0?' <span style="font-size:10px;color:#0c447c">（下一班）</span>':'')+(arrInfo?arrInfo:'')+'</label>';
   }).join('');
 }
 function clearNF(){['f-n1','f-n2','f-n3','f-n4','f-n5'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';})}
@@ -2708,8 +2430,13 @@ function getDefaultStation(){
   return validStations.includes(st)?st:'G9';
 }
 function getDefaultToStation(from){
-  /* 迄站：預設與起站相同，由使用者依實際上下行方向手動選擇 */
-  return from;
+  /* 迄站：從起站往後3站作為預設 */
+  const order=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
+  const idx=order.indexOf(from);
+  if(idx===-1) return 'G13';
+  /* 往高鐵方向預設往後3站，若已是末站則往前 */
+  const toIdx=Math.min(idx+3, order.length-1);
+  return toIdx===idx?order[Math.max(0,idx-3)]:order[toIdx];
 }
 
 function openModal(){
@@ -2733,32 +2460,10 @@ function openModal(){
     fromSel.style.display='';
     fromLocked.style.display='none';
   }
-  clearNF();autoDir();
-  /* 完整重置自行車旅客相關狀態，避免前次選擇殘留 */
-  document.getElementById('f-type').value='視障旅客';
-  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
-  const bci=document.getElementById('bike-cap-info');if(bci){bci.style.display='none';}
-  const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
-  const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
-  const gate=document.getElementById('f-gate');
-  if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';gate.value='01 車門';}
-  document.getElementById('modal-form').classList.add('open');}
-function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;document.getElementById('f-edit-id').value=id;document.getElementById('mf-title').textContent='編輯引導事件';document.getElementById('mf-submit').textContent='儲存變更';document.getElementById('train-sel-wrap').style.display='none';document.getElementById('f-from').value=ev.from;document.getElementById('f-to').value=ev.to;document.getElementById('f-dir').value=ev.dir;document.getElementById('dir-display').textContent=ev.dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';document.getElementById('f-train').value=ev.trainGroup||'';document.getElementById('f-type').value=ev.type;document.getElementById('f-gate').value=ev.gate;document.getElementById('f-gender').value=ev.gender;parseNote(ev.note||'');
-  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display=ev.type==='自行車旅客'?'block':'none';
-  const gate=document.getElementById('f-gate');
-  if(gate){gate.disabled=ev.type==='自行車旅客';gate.style.opacity=ev.type==='自行車旅客'?'0.35':'1';gate.style.cursor=ev.type==='自行車旅客'?'not-allowed':'';}
-  if(ev.type==='自行車旅客'){const b2=document.getElementById('f-bike2');const b9=document.getElementById('f-bike9');if(b2)b2.value=ev.bikeDoor2||0;if(b9)b9.value=ev.bikeDoor9||0;}
-  document.getElementById('modal-form').classList.add('open');}
-function closeFormModal(){
-  document.getElementById('modal-form').classList.remove('open');
-  /* 關閉時重置 gate 啟用狀態與自行車台數，防止下次開啟時殘留 */
-  const gate=document.getElementById('f-gate');
-  if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';}
-  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
-  const bci=document.getElementById('bike-cap-info');if(bci)bci.style.display='none';
-  const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
-  const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
+  clearNF();autoDir();document.getElementById('modal-form').classList.add('open');
 }
+function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;document.getElementById('f-edit-id').value=id;document.getElementById('mf-title').textContent='編輯引導事件';document.getElementById('mf-submit').textContent='儲存變更';document.getElementById('train-sel-wrap').style.display='none';document.getElementById('f-from').value=ev.from;document.getElementById('f-to').value=ev.to;document.getElementById('f-dir').value=ev.dir;document.getElementById('dir-display').textContent=ev.dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';document.getElementById('f-train').value=ev.trainGroup||'';document.getElementById('f-type').value=ev.type;document.getElementById('f-gate').value=ev.gate;document.getElementById('f-gender').value=ev.gender;parseNote(ev.note||'');document.getElementById('modal-form').classList.add('open');}
+function closeFormModal(){document.getElementById('modal-form').classList.remove('open');}
 async function submitEvent(){
   const eid=document.getElementById('f-edit-id').value,note=buildNote();
   if(eid){
@@ -2773,12 +2478,7 @@ async function submitEvent(){
   const sel=document.querySelector('input[name="tsel"]:checked');if(!sel){alert('請選擇班次');return;}if(!CU)return;
   const newTo=document.getElementById('f-to').value||'G13';
   const newFrom=document.getElementById('f-from').value||'G9';
-  if(newFrom===newTo){showToast('起站與迄站不能相同，請重新選擇');return;}
   const newType=document.getElementById('f-type').value;
-  const isBike=newType==='自行車旅客';
-  const bikeDoor2=isBike?parseInt((document.getElementById('f-bike2')||{}).value||'0'):0;
-  const bikeDoor9=isBike?parseInt((document.getElementById('f-bike9')||{}).value||'0'):0;
-  if(isBike&&bikeDoor2+bikeDoor9===0){showToast('請至少填入 1 台自行車數量');return;}
   /* 查詢迄站到站時間 */
   const departStr=new Date(sel.value).getHours().toString().padStart(2,'0')+':'+new Date(sel.value).getMinutes().toString().padStart(2,'0');
   const selDir=document.getElementById('f-dir').value;
@@ -2792,7 +2492,7 @@ async function submitEvent(){
     /* 若深夜跨日（如00:xx），加一天 */
     if(ah<5&&arrivalTime<new Date(sel.value))arrivalTime.setDate(arrivalTime.getDate()+1);
   }
-  const evData={from:newFrom,to:newTo,dir:selDir,trainGroup:document.getElementById('f-train').value||'',gate:document.getElementById('f-gate').value,gender:document.getElementById('f-gender').value,type:newType,note,departTime:new Date(sel.value),arrivalTime:arrivalTime,departTimeStr:departStr,arrivalTimeStr:arrStr||'',createdBy:CU.username,station:newFrom,stationTo:newTo,createdAt:new Date(),isNotify:isNotifyEvent(newType),bikeDoor2,bikeDoor9};
+  const evData={from:newFrom,to:newTo,dir:selDir,trainGroup:document.getElementById('f-train').value||'',gate:document.getElementById('f-gate').value,gender:document.getElementById('f-gender').value,type:newType,note,departTime:new Date(sel.value),arrivalTime:arrivalTime,departTimeStr:departStr,arrivalTimeStr:arrStr||'',createdBy:CU.username,station:newFrom,stationTo:newTo,createdAt:new Date()};
   await addEventToDb(evData);
   addLog('create','新增事件 '+newFrom+'→'+newTo+' '+newType);
   closeFormModal();
@@ -2801,42 +2501,30 @@ function tick(){
   const now=new Date();
   const cd=document.getElementById('clock-display');if(cd)cd.textContent=now.getFullYear()+'/'+(now.getMonth()+1).toString().padStart(2,'0')+'/'+now.getDate().toString().padStart(2,'0')+' '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
   events.forEach(ev=>{
-    const arrT=ev.arrivalTime||ev.departTime;const ms=arrT-now;
-    const el=document.getElementById('cd-'+ev.id),card=document.getElementById('card-'+ev.id);
-    const isNotify=isNotifyEvent(ev.type),isBike=ev.type==='自行車旅客';
-    /* 更新倒數顯示（僅引導型事件有 cd- 元素） */
-    if(el){
-      el.textContent=fmtCd(ms);
-      const cls=cdCls(ms);el.className='countdown-num '+cls;
-      if(card&&!isNotify)card.className='event-card '+(cls==='danger'?'danger':cls==='warn'?'warn':'normal');
-    }
+    const arrT=ev.arrivalTime||ev.departTime;const ms=arrT-now,el=document.getElementById('cd-'+ev.id),card=document.getElementById('card-'+ev.id);
+    if(!el)return;
+    const cls=cdCls(ms);
+    el.textContent=fmtCd(ms);
+    el.className='countdown-num '+cls;
+    if(card)card.className='event-card '+(cls==='danger'?'danger':cls==='warn'?'warn':'normal');
+    /* 音效只在：非S級 且 本站是迄站 才觸發 */
     const isMyArrival=CU&&CU.role!=='S'&&ev.to===CU.station;
-    /* 引導型事件：三階段提醒（3分/90秒/30秒/到站）*/
-    if(!isNotify){
-      if(ms<=180000&&ms>60000&&!wF.has(ev.id)){wF.add(ev.id);if(isMyArrival){showAlertCard(ev.id,'warn','⚠️','準備就緒提醒　距發車約 3 分鐘',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，已派員至指定地點</button>','warn');}}
-      if(ms<=90000&&ms>0&&!dF.has(ev.id)){dF.add(ev.id);if(isMyArrival){showAlertCard(ev.id,'danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger');}}
-      /* 30秒警示：僅播放一次音效，不顯示卡片 */
-      if(ms<=30000&&ms>0&&!thF.has(ev.id)){thF.add(ev.id);if(isMyArrival)playCS('thirty');}
+    if(ms<=180000&&ms>60000&&!wF.has(ev.id)){
+      wF.add(ev.id);
+      if(isMyArrival){showAlertCard(ev.id,'warn','⚠️','準備就緒提醒　距發車約 3 分鐘',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，已派員至指定地點</button>','warn');}
     }
-    /* 到站：引導型與通知型分別呈現不同彈窗 */
+    if(ms<=90000&&ms>0&&!dF.has(ev.id)){
+      dF.add(ev.id);
+      if(isMyArrival){showAlertCard(ev.id,'danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger');}
+    }
     if(ms<=0&&!doF.has(ev.id)){
       doF.add(ev.id);
-      if(isMyArrival){
-        if(isNotify){
-          showAlertCard(ev.id,'success',isBike?'🚲':'👥',
-            isBike?'自行車旅客到站　請回收感熱紙':'團體旅客到站　請回收感熱紙',
-            aInfo(ev),'',
-            '<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishNotifyOk(this.dataset.id)"><i class="ti ti-check"></i> 已回收感熱紙</button>',
-            isBike?'bike_arrive':'group_arrive');
-        } else {
-          showAlertCard(ev.id,'success','✅','列車已到站',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishOk(this.dataset.id)"><i class="ti ti-check"></i> 已接到旅客</button><button class="btn" style="color:#E24B4A;border-color:#E24B4A;margin-left:8px" data-id="'+ev.id+'" onclick="finishFail(this.dataset.id)"><i class="ti ti-x"></i> 未接到旅客</button>','success');
-        }
-      }
+      if(isMyArrival){showAlertCard(ev.id,'success','✅','列車已到站',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishOk(this.dataset.id)"><i class="ti ti-check"></i> 已接到旅客</button><button class="btn" style="color:#E24B4A;border-color:#E24B4A;margin-left:8px" data-id="'+ev.id+'" onclick="finishFail(this.dataset.id)"><i class="ti ti-x"></i> 未接到旅客</button>','success');}
     }
-    /* 超時自動結案（發車超過 10 分鐘）：清除所有彈窗 */
+    /* 自動結案：發車超過 10 分鐘仍未結案 → 自動寫入歷史（超時）並刪除 */
     if(ms<-600000&&!autoCloseF.has(ev.id)){
       autoCloseF.add(ev.id);
-      closeAlertCard(ev.id);
+      closeAlertCard(ev.id);/* 清除卡住的彈窗，讓後續事件能正常通知 */
       const now2=new Date();
       const mm2=(now2.getMonth()+1).toString().padStart(2,'0');
       const dd2=now2.getDate().toString().padStart(2,'0');
@@ -3020,7 +2708,7 @@ const H26={'2026-1-1':'first','2026-2-14':'first','2026-2-15':'rest','2026-2-16'
 const CAL_CSS={weekday:'background:#E6F1FB;border:0.5px solid #B5D4F4;color:#0C447C',first:'background:#FAEEDA;border:0.5px solid #FAC775;color:#633806',rest:'background:#EAF3DE;border:0.5px solid #C0DD97;color:#3B6D11',special:'background:#EEEDFE;border:0.5px solid #AFA9EC;color:#3C3489',warning:'background:#FCEBEB;border:0.5px solid #F09595;color:#791F1F'};
 const CAL_LABELS={weekday:'平日版',first:'假期首日版',rest:'假期其餘日版',warning:'需上傳'};
 const CAL_BADGE={weekday:'background:#E6F1FB;color:#0C447C;border:0.5px solid #B5D4F4',first:'background:#FAEEDA;color:#633806;border:0.5px solid #FAC775',rest:'background:#EAF3DE;color:#3B6D11;border:0.5px solid #C0DD97',special:'background:#EEEDFE;color:#3C3489;border:0.5px solid #AFA9EC',warning:'background:#FCEBEB;color:#791F1F;border:0.5px solid #F09595'};
-let calOvr={},calYear=new Date().getFullYear(),calMonth=new Date().getMonth()+1,calEditKey=null,calEditSel=null,calEditSvId=null;
+let calOvr={},calYear=2026,calMonth=6,calEditKey=null,calEditSel=null,calEditSvId=null;
 
 let calUnsubscribe=null;
 function loadCalOvr(){
@@ -3231,19 +2919,18 @@ function setEventFilter(mode){
 function getFilteredEvents(){
   if(!CU) return events;
   const mgmt=isMgmtUnit(CU.station);
-  const myStation=CU.station;
-  /* 途經站自行車事件：全線模式顯示（方便識別），本站模式才排除至 banner */
-  const excludeTransit=ev=>!(ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(myStation));
   if(mgmt){
-    if(eventFilter==='all') return events; /* 全線：全部顯示 */
-    if(eventFilter==='depart') return events.filter(ev=>ev.from===eventFilterDepart&&excludeTransit(ev));
-    if(eventFilter==='arrive') return events.filter(ev=>ev.to===eventFilterArrive&&excludeTransit(ev));
-    return events.filter(excludeTransit);
+    if(eventFilter==='all') return events;
+    if(eventFilter==='depart') return events.filter(ev=>ev.from===eventFilterDepart);
+    if(eventFilter==='arrive') return events.filter(ev=>ev.to===eventFilterArrive);
+    return events;
   }
-  if(eventFilter==='all') return events; /* 全線：含途經自行車事件一起顯示 */
-  if(eventFilter==='depart') return events.filter(ev=>ev.from===myStation&&excludeTransit(ev));
-  if(eventFilter==='arrive') return events.filter(ev=>ev.to===myStation&&excludeTransit(ev));
-  return events.filter(excludeTransit);
+  /* 一般車站帳號 */
+  const myStation=CU.station;
+  if(eventFilter==='all') return events;
+  if(eventFilter==='depart') return events.filter(ev=>ev.from===myStation);
+  if(eventFilter==='arrive') return events.filter(ev=>ev.to===myStation);
+  return events;
 }
 
 
@@ -3259,26 +2946,25 @@ Object.assign(window,{
   closeMobileMenu, closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc,
   deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
   downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
-  filterChatLog, filterLog, finishFail, finishNotifyOk, finishOk, fmt, fmtCd, ga,
-  getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents,
-  getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile,
-  handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent, isCalDeleted, isMgmtUnit,
-  isNotifyEvent, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory, loadLogs, loadMoreChatLog,
-  loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr,
-  nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange, onTypeChange, openAccEdit,
-  openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT, openFilePreview, openHistoryEdit,
-  openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS, playCurrentSoundCS,
-  playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
-  renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents, renderHistory, renderLog,
-  renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, renderTransitBanner, resetChatLogFilter,
-  resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb,
-  saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, sendChatMessage,
-  setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol,
-  speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice,
-  speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
-  submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall,
-  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2,
-  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  filterChatLog, filterLog, finishFail, finishOk, fmt, fmtCd, ga, getArrivalTime,
+  getCalEntry, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents, getNextN, getSelectedAccIds,
+  getTodayTTName, getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload,
+  initTTTableEvents, insertEmoji, isCalDeleted, isMgmtUnit, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages,
+  loadHistory, loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess,
+  makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange,
+  onTTChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT,
+  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
+  playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts,
+  renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents,
+  renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable,
+  resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit,
+  saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset,
+  sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice,
+  speakArrivalNoticeVol, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, startCardLoop, startEventsListener, startLock,
+  stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT,
+  toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar,
+  updateAccInDb, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains,
+  uploadLogo
 });
 
 
