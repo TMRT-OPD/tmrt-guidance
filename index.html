@@ -1620,16 +1620,17 @@ function renderTransitBanner(){
   wrap.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
   wrap.innerHTML=transitEvs.sort((a,b)=>a.departTime-b.departTime).map(ev=>{
     const total=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
-    const remain=4-total;
-    const arrT=ev.arrivalTime||ev.departTime;
+    /* 同班次所有自行車事件累計（同迄站＋同到站時間＋同方向） */
+    const trainTotal=events.filter(e=>e.type==='自行車旅客'&&e.to===ev.to&&e.arrivalTimeStr===ev.arrivalTimeStr&&e.dir===ev.dir).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0);
+    const remain=Math.max(0,4-trainTotal);
     const timeStr=ev.arrivalTimeStr||fmt(ev.departTime);
     return '<div style="display:flex;align-items:center;gap:8px;background:#E0F3F7;border:1px dashed #9AD8E8;border-radius:8px;padding:8px 14px;font-size:12px">'+
       '<span style="font-size:14px">🚲</span>'+
       '<span style="color:#0E667A;font-weight:600">途經提醒</span>'+
       '<span style="color:#0E667A">'+SN[ev.from]+' → '+SN[ev.to]+'</span>'+
       '<span style="color:var(--color-text-secondary)">'+timeStr+'</span>'+
-      '<span style="background:#fff;border:1px solid #9AD8E8;border-radius:4px;padding:1px 8px;color:#0E667A;font-weight:600">02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台</span>'+
-      '<span style="color:'+(remain>0?'#1D9E75':'#E24B4A')+';font-weight:600">剩餘 '+remain+' 台</span>'+
+      '<span style="background:#fff;border:1px solid #9AD8E8;border-radius:4px;padding:1px 8px;color:#0E667A;font-weight:600">本次 02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台</span>'+
+      '<span style="color:'+(remain>0?'#1D9E75':'#E24B4A')+';font-weight:600">同班累計 '+trainTotal+' 台 · 剩餘 '+remain+' 台</span>'+
     '</div>';
   }).join('');
 }
