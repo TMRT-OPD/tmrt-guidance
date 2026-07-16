@@ -1,5 +1,5 @@
 /* ── Firebase 初始化 ── */
-const BUILD = 5; /* 系統版本：每次推送前遞增 */
+const BUILD = 6; /* 系統版本：每次推送前遞增 */
 document.addEventListener('DOMContentLoaded',()=>{const el=document.getElementById('build-num');if(el)el.textContent=BUILD;});
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -1449,7 +1449,7 @@ function renderChatLog(){
   document.getElementById('chatlog-body').innerHTML=pageData.map(m=>{
     const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
     const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
-    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td><td><button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A;padding:2px 6px" data-id="'+m.id+'" onclick="deleteChatMsg(this.dataset.id)" title="刪除此訊息"><i class="ti ti-trash" style="font-size:12px"></i></button></td></tr>';
+    return '<tr><td style="text-align:center"><input type="checkbox" class="chatlog-chk" data-id="'+m.id+'" onchange="onChatLogChkChange()"></td><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td></tr>';
   }).join('');
   document.getElementById('chatlog-count').textContent='共 '+chatLogFiltered.length+' 筆記錄'+(totalPages>1?'　第 '+chatLogPage+' / '+totalPages+' 頁':'');
   renderChatLogPagination(totalPages);
@@ -1472,6 +1472,36 @@ function renderChatLogPagination(totalPages){
   w.innerHTML=html;
 }
 function goChatLogPage(p){chatLogPage=p;renderChatLog();}
+function onChatLogChkChange(){
+  const all=[...document.querySelectorAll('.chatlog-chk')];
+  const checked=all.filter(c=>c.checked);
+  const bar=document.getElementById('chatlog-batch-bar');
+  const cnt=document.getElementById('chatlog-sel-count');
+  const allChk=document.getElementById('chatlog-select-all');
+  if(bar)bar.style.display=checked.length?'flex':'none';
+  if(cnt)cnt.textContent='已選取 '+checked.length+' 則';
+  if(allChk)allChk.indeterminate=checked.length>0&&checked.length<all.length;
+  if(allChk&&checked.length===all.length)allChk.checked=true;
+  if(allChk&&checked.length===0)allChk.checked=false;
+}
+function toggleSelectAllChatLog(el){
+  document.querySelectorAll('.chatlog-chk').forEach(c=>{c.checked=el.checked;});
+  onChatLogChkChange();
+}
+async function deleteSelectedChatMsgs(){
+  if(!CU||CU.role!=='S')return;
+  const checked=[...document.querySelectorAll('.chatlog-chk:checked')];
+  if(!checked.length)return;
+  if(!confirm('確定要刪除選取的 '+checked.length+' 則訊息嗎？此操作無法復原。'))return;
+  const ids=checked.map(el=>el.dataset.id);
+  try{
+    await Promise.all(ids.map(id=>deleteDoc(doc(db,'chatMessages',id))));
+    addLog('edit','批次刪除對話訊息 '+ids.length+' 則');
+    chatLogAll=chatLogAll.filter(m=>!ids.includes(m.id));
+    filterChatLog();
+    showToast('已刪除 '+ids.length+' 則訊息');
+  }catch(e){showToast('刪除失敗：'+e.message);}
+}
 async function deleteChatMsg(id){
   if(!CU||CU.role!=='S')return;
   if(!confirm('確定要刪除這則訊息嗎？此操作無法復原。'))return;
@@ -2581,28 +2611,29 @@ Object.assign(window,{
   calKey, calNextMonth, calPrevMonth, calcDir, canSeeChatMsg, cdCls, clearAccSelection, clearHistSelection,
   clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeEmojiPickerOutside, closeFormModal, closeMobileMenu,
   closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc, deleteAccFromDb,
-  deleteChatMsg, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
-  downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
-  filterChatLog, filterLog, finishFail, finishNotifyOk, finishOk, fmt, fmtCd, ga,
-  getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents,
-  getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile,
-  handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent, isCalDeleted, isMgmtUnit,
-  isNotifyEvent, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory, loadLogs, loadMoreChatLog,
-  loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr,
-  nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange, onTypeChange, openAccEdit,
-  openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT, openFilePreview, openHistoryEdit,
-  openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS, playCurrentSoundCS,
-  playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
-  renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents, renderHistory, renderLog,
-  renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, renderTransitBanner, resetChatLogFilter,
-  resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb,
-  saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, sendChatMessage,
-  setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol,
-  speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice,
-  speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
-  submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall,
-  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2,
-  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+  deleteChatMsg, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteSelectedChatMsgs, deleteTTFromDb, doCalImport, doLogin,
+  doLogout, downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog,
+  exportMonthReport, filterChatLog, filterLog, finishFail, finishNotifyOk, finishOk, fmt, fmtCd,
+  ga, getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound,
+  getFilteredEvents, getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage,
+  handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent, isCalDeleted,
+  isMgmtUnit, isNotifyEvent, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory, loadLogs,
+  loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter,
+  nowStr, nowStr2, onChatLogChkChange, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange,
+  onTypeChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT,
+  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
+  playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts,
+  renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents,
+  renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable,
+  renderTransitBanner, resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound,
+  saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType,
+  selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList,
+  speakArrivalNotice, speakArrivalNoticeVol, speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce,
+  speakDangerPreview, speakGroupArriveNotice, speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop,
+  submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc,
+  toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, toggleSelectAllChatLog, ttTimeToMin, updateAccBatchBar,
+  updateAccInDb, updateBikeCapacity, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol,
+  updateTrains, uploadLogo
 });
 
 
