@@ -1534,11 +1534,13 @@ function onTypeChange(){
       if(isBikeType&&fTo.value==='G17'){fTo.value='G0';updateTrains();}
     }
   }
-  /* 若 B 級帳號本身就在 G17，禁止新增自行車引導事件 */
-  if(isBikeType&&fFrom&&fFrom.disabled&&fFrom.value==='G17'){
-    showToast('G17 高鐵臺中站依公司規定無法設為自行車旅客起站或迄站');
+  /* 若本站為 G17，整站禁止新增自行車旅客事件（公司規定：G17 無法作為起訖站） */
+  if(isBikeType&&CU&&CU.station==='G17'){
+    showToast('G17 高鐵臺中站依公司規定無法使用自行車旅客功能');
     document.getElementById('f-type').value='視障旅客';
     if(w)w.style.display='none';
+    if(gender){gender.disabled=false;gender.style.opacity='1';gender.style.cursor='';if(!gender.value)gender.value='男性';}
+    if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';}
     return;
   }
   if(isBikeType) updateBikeCapacity();
