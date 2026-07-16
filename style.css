@@ -271,4 +271,5 @@ input[type=range]{flex:1;accent-color:#378ADD}
   color:var(--color-text-tertiary);
   letter-spacing:0.3px;
   user-select:none;
+  text-align:center;
 }
