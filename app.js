@@ -1,5 +1,5 @@
 /* ── Firebase 初始化 ── */
-const BUILD = 3; /* 系統版本：每次推送前遞增 */
+const BUILD = 4; /* 系統版本：每次推送前遞增 */
 document.addEventListener('DOMContentLoaded',()=>{const el=document.getElementById('build-num');if(el)el.textContent=BUILD;});
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -1992,6 +1992,8 @@ function updateTrains(){
     const arrInfo=arrStr?'<span style="font-size:10px;color:#1D9E75;margin-left:6px">→ '+SN[to]+'站 '+arrStr+' 到站</span>':'';
     return '<label class="train-option '+(i===0?'selected':'')+'"><input type="radio" name="tsel" value="'+dt.toISOString()+'" data-depart="'+departStr+'" data-arr="'+(arrStr||'')+'" '+(i===0?'checked':'')+' onchange="this.closest(\'.next-trains\').querySelectorAll(\'.train-option\').forEach(x=>x.classList.remove(\'selected\'));this.closest(\'.train-option\').classList.add(\'selected\');updateBikeCapacity();">'+fmt(dt)+' 發車'+(i===0?' <span style="font-size:10px;color:#0c447c">（下一班）</span>':'')+(arrInfo?arrInfo:'')+'</label>';
   }).join('');
+  /* 班次重算後，若目前類型為自行車旅客，一併更新容量防呆（覆蓋所有觸發路徑） */
+  updateBikeCapacity();
 }
 function clearNF(){['f-n1','f-n2','f-n3','f-n4','f-n5'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';})}
 
