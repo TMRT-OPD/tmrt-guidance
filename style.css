@@ -263,3 +263,12 @@ input[type=range]{flex:1;accent-color:#378ADD}
   .chat-msg-header{max-width:78%}
 
 }
+
+/* 系統版本標示 */
+.build-ver{
+  padding:8px 16px 12px;
+  font-size:10px;
+  color:var(--color-text-tertiary);
+  letter-spacing:0.3px;
+  user-select:none;
+}
