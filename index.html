@@ -325,7 +325,13 @@
     <input type="date" id="cl-date-end" onchange="document.getElementById('cl-date-quick').value='';filterChatLog()" style="font-size:12px">
     <button class="btn btn-sm" onclick="resetChatLogFilter()"><i class="ti ti-refresh"></i> 重置篩選</button>
   </div>
-  <div class="card"><table class="vtable"><thead><tr><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th><th style="width:56px">操作</th></tr></thead><tbody id="chatlog-body"></tbody></table></div>
+  <div class="card">
+    <div id="chatlog-batch-bar" style="display:none;padding:8px 12px 6px;border-bottom:1px solid var(--color-border-tertiary);display:flex;align-items:center;gap:10px">
+      <span id="chatlog-sel-count" style="font-size:12px;color:var(--color-text-secondary)">已選取 0 則</span>
+      <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" onclick="deleteSelectedChatMsgs()"><i class="ti ti-trash"></i> 刪除選取</button>
+    </div>
+    <table class="vtable"><thead><tr><th style="width:36px"><input type="checkbox" id="chatlog-select-all" onchange="toggleSelectAllChatLog(this)" title="全選/取消全選"></th><th>時間</th><th>發送者</th><th>發送對象</th><th>內容</th></tr></thead><tbody id="chatlog-body"></tbody></table>
+  </div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
     <div style="font-size:11px;color:var(--color-text-tertiary)" id="chatlog-count"></div>
     <div style="display:flex;gap:6px;align-items:center" id="chatlog-pagination"></div>
