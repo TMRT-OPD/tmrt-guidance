@@ -2842,18 +2842,18 @@ async function submitEvent(){
     closeFormModal();return;
   }
   /* 新增事件 */
-  const sel=document.querySelector('input[name="tsel"]:checked');if(!sel){alert('請選擇班次');return;}if(!CU)return;
-  const newTo=document.getElementById('f-to').value||'G13';
-  const newFrom=document.getElementById('f-from').value||'G9';
-  if(newFrom===newTo){showToast('起站與迄站不能相同，請重新選擇');return;}
-  /* G17 自行車旅客限制（最終防線，防止繞過 UI） */
-  if(newType==='自行車旅客'&&(newFrom==='G17'||newTo==='G17')){
-    showToast('G17 高鐵臺中站依公司規定無法設為自行車旅客起站或迄站');return;
-  }
   const newType=document.getElementById('f-type').value;
   const isBike=newType==='自行車旅客';
   const bikeDoor2=isBike?parseInt((document.getElementById('f-bike2')||{}).value||'0'):0;
   const bikeDoor9=isBike?parseInt((document.getElementById('f-bike9')||{}).value||'0'):0;
+  const sel=document.querySelector('input[name="tsel"]:checked');if(!sel){alert('請選擇班次');return;}if(!CU)return;
+  const newTo=document.getElementById('f-to').value||'G13';
+  const newFrom=document.getElementById('f-from').value||'G9';
+  if(newFrom===newTo){showToast('起站與迄站不能相同，請重新選擇');return;}
+  /* G17 自行車旅客限制（最終防線） */
+  if(isBike&&(newFrom==='G17'||newTo==='G17')){
+    showToast('G17 高鐵臺中站依公司規定無法設為自行車旅客起站或迄站');return;
+  }
   if(isBike&&bikeDoor2+bikeDoor9===0){showToast('請至少填入 1 台自行車數量');return;}
   /* 查詢迄站到站時間 */
   const departStr=new Date(sel.value).getHours().toString().padStart(2,'0')+':'+new Date(sel.value).getMinutes().toString().padStart(2,'0');
