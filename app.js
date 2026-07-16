@@ -1,0 +1,2616 @@
+/* ── Firebase 初始化 ── */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAZhpwsD_z18qRUdYchFCTT4HB7VWcpQQI",
+  authDomain: "tmrt-guidance.firebaseapp.com",
+  projectId: "tmrt-guidance",
+  storageBucket: "tmrt-guidance.firebasestorage.app",
+  messagingSenderId: "213515976449",
+  appId: "1:213515976449:web:50e541bf6e2240ab48a500"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* ── 帳號資料庫（從 Firestore 載入） ── */
+let ACCOUNTS=[];
+let nextAccId=2;
+let dbReady=false;
+
+let accUnsubscribe=null;
+function loadAccounts(){
+  return new Promise(resolve=>{
+    if(accUnsubscribe)accUnsubscribe();
+    accUnsubscribe=onSnapshot(collection(db,'accounts'),snap=>{
+      ACCOUNTS=snap.docs.map(d=>({...d.data(),id:d.id}));
+      const nums=ACCOUNTS.map(u=>parseInt(u.id.replace('a',''))).filter(n=>!isNaN(n));
+      nextAccId=(nums.length?Math.max(...nums):1)+1;
+      if(!dbReady){dbReady=true;resolve();}
+      /* 即時踢出：若目前登入帳號被停用 */
+      if(CU){
+        const me=ACCOUNTS.find(u=>u.username===CU.username);
+        if(me&&me.status!=='啟用'){showToast('您的帳號已被停用，即將登出');setTimeout(doLogout,2000);}
+      }
+      if(CU)renderAccounts();
+    },e=>{console.error('帳號監聽失敗',e);dbReady=true;resolve();});
+  });
+}
+
+async function saveAccToDb(u){
+  try{ await setDoc(doc(db,'accounts',u.id),u); }catch(e){console.error('儲存帳號失敗',e);}
+}
+async function deleteAccFromDb(id){
+  try{ await deleteDoc(doc(db,'accounts',id)); }catch(e){console.error('刪除帳號失敗',e);}
+}
+async function updateAccInDb(u){
+  try{ await updateDoc(doc(db,'accounts',u.id),u); }catch(e){console.error('更新帳號失敗',e);}
+}
+
+/* ── 登入邏輯 ── */
+let loginAttempts=0,lockTimer=null,lockRemain=300,CU=null;
+
+function clearLoginErr(){
+  document.getElementById('l-err').textContent='';
+  document.getElementById('l-acc').classList.remove('inp-err');
+  document.getElementById('l-pwd').classList.remove('inp-err');
+}
+function toggleLoginEye(){
+  const inp=document.getElementById('l-pwd'),icon=document.getElementById('eye-icon');
+  if(inp.type==='password'){inp.type='text';icon.className='ti ti-eye-off';}
+  else{inp.type='password';icon.className='ti ti-eye';}
+}
+function togglePwd(inputId,btn){
+  const inp=document.getElementById(inputId),icon=btn.querySelector('i');
+  if(inp.type==='password'){inp.type='text';icon.className='ti ti-eye-off';}
+  else{inp.type='password';icon.className='ti ti-eye';}
+}
+async function doLogin(){
+  if(lockTimer)return;
+  const acc=document.getElementById('l-acc').value.trim();
+  const pwd=document.getElementById('l-pwd').value;
+  const errEl=document.getElementById('l-err');
+  if(!acc||!pwd){errEl.innerHTML='<i class="ti ti-alert-circle"></i> 請輸入帳號與密碼';if(!acc)document.getElementById('l-acc').classList.add('inp-err');if(!pwd)document.getElementById('l-pwd').classList.add('inp-err');return;}
+  /* 等 DB 就緒 */
+  if(!dbReady){errEl.innerHTML='<i class="ti ti-alert-circle"></i> 系統初始化中，請稍候…';return;}
+  const user=ACCOUNTS.find(u=>u.username===acc&&u.status==='啟用');
+  if(!user){errEl.innerHTML='<i class="ti ti-alert-circle"></i> 帳號不存在或已停用';document.getElementById('l-acc').classList.add('inp-err');return;}
+  if(user.password!==pwd){
+    loginAttempts++;
+    document.getElementById('l-acc').classList.add('inp-err');
+    document.getElementById('l-pwd').classList.add('inp-err');
+    document.getElementById('l-pwd').value='';
+    const remain=5-loginAttempts;
+    if(loginAttempts>=5){startLock();}
+    else{errEl.innerHTML='<i class="ti ti-alert-circle"></i> 帳號或密碼錯誤';document.getElementById('l-attempt').textContent='還可嘗試 '+remain+' 次，達 5 次將鎖定 5 分鐘';}
+    return;
+  }
+  loginAttempts=0;
+  /* ── 裝置 Token 驗證（S 級豁免）── */
+  if(user.role!=='S'){
+    const localToken=localStorage.getItem('tmrt_dt_'+user.username);
+    if(user.deviceToken&&user.deviceToken!==''){
+      /* 已綁定裝置：比對 token */
+      if(localToken!==user.deviceToken){
+        document.getElementById('l-err').innerHTML='<i class="ti ti-shield-lock"></i> 此帳號已綁定其他裝置，請聯繫管理員重置';
+        document.getElementById('l-acc').classList.add('inp-err');
+        return;
+      }
+    } else {
+      /* 首次登入：產生並綁定 token */
+      const newToken=crypto.randomUUID();
+      localStorage.setItem('tmrt_dt_'+user.username,newToken);
+      user.deviceToken=newToken;
+    }
+  }
+  CU=user;
+  const prevLogin=user.lastLogin||'—';
+  const prevIp=user.lastLoginIp||'—';
+  user.lastLogin=nowStr();
+  user.lastLoginIp=user.ip||'—';
+  /* 寫回 Firestore */
+  await updateAccInDb(user);
+  loginSuccess(prevLogin,prevIp);
+}
+function nowStr(){const n=new Date();return n.getFullYear()+'/'+(n.getMonth()+1).toString().padStart(2,'0')+'/'+n.getDate().toString().padStart(2,'0')+' '+n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
+function startLock(){
+  lockRemain=300;
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('lock-wrap').style.display='block';
+  updateLockCd();
+  lockTimer=setInterval(()=>{lockRemain--;updateLockCd();if(lockRemain<=0){clearInterval(lockTimer);lockTimer=null;loginAttempts=0;document.getElementById('lock-wrap').style.display='none';document.getElementById('login-form').style.display='block';document.getElementById('l-attempt').textContent='帳號已解鎖，請重新登入';document.getElementById('l-pwd').value='';}},1000);
+}
+function updateLockCd(){const m=Math.floor(lockRemain/60),s=lockRemain%60;document.getElementById('lock-cd').textContent=m.toString().padStart(2,'0')+':'+s.toString().padStart(2,'0');}
+function loginSuccess(prevLogin,prevIp){
+  /* 初始化報表日期 */
+  const today=new Date();
+  const yyyy=today.getFullYear();
+  const mm=(today.getMonth()+1).toString().padStart(2,'0');
+  const dd=today.getDate().toString().padStart(2,'0');
+  const firstDay=yyyy+'-'+mm+'-01';
+  const todayStr=yyyy+'-'+mm+'-'+dd;
+  setTimeout(()=>{
+    const rs=document.getElementById('report-start');
+    const re=document.getElementById('report-end');
+    if(rs)rs.value=firstDay;
+    if(re)re.value=todayStr;
+  },100);
+  document.getElementById('last-toast-text').textContent='上次登入：'+prevLogin+'　來源 IP：'+prevIp;
+  const toast=document.getElementById('last-toast');toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),4500);
+  const badgeColor={S:'badge-purple',A:'badge-blue',B:'badge-gray'}[CU.role]||'badge-gray';
+  document.getElementById('sidebar-user-badge').innerHTML='<span class="badge '+badgeColor+'">'+CU.role+'級</span><span style="color:var(--color-text-secondary)">'+CU.name+' · '+CU.station+'</span>';
+  document.getElementById('last-login-time').textContent=prevLogin;
+  document.getElementById('last-login-ip').textContent=prevIp;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('main-screen').style.display='block';
+  /* 存 session 供重整恢復 */
+  sessionStorage.setItem('tmrt_session_user', CU.username);
+  sessionStorage.setItem('tmrt_session_dt', localStorage.getItem('tmrt_dt_'+CU.username)||'');
+  applyNavRole();renderAccounts();loadHistory();loadLogs();renderEvents();loadSuspendStatus();loadTTMode();loadSoundSettings();loadTTVersions();loadCalOvr();loadChatMessages();initTTTableEvents();setTimeout(()=>addLog('login','登入系統'),200);
+  /* B 級預設：本站（到站）；S/A 級：全線 */
+  eventFilter=CU.role==='B'?'arrive':(CU.role==='S'?'all':'arrive');
+  eventFilterStation='all';
+  buildEventFilter();
+  /* 更新行事曆頁面今日版次顯示 */
+  const ttLabel=document.getElementById('tt-current-label');
+  if(ttLabel)ttLabel.textContent='目前判斷結果：'+getTodayTTName();
+
+  setInterval(()=>{tick();},1000);tick();startEventsListener();
+}
+function doLogout(){if(confirm('確定登出？')){
+  /* 清除所有 onSnapshot listener */
+  if(typeof accUnsubscribe==='function'){accUnsubscribe();accUnsubscribe=null;}
+  if(typeof historyUnsubscribe==='function'){historyUnsubscribe();historyUnsubscribe=null;}
+  if(typeof suspendUnsubscribe==='function'){suspendUnsubscribe();suspendUnsubscribe=null;}
+  if(typeof ttModeUnsubscribe==='function'){ttModeUnsubscribe();ttModeUnsubscribe=null;}
+  if(typeof chatUnsubscribe==='function'){chatUnsubscribe();chatUnsubscribe=null;}
+  chatMessages=[];chatKnownIds=new Set();chatInitialized=false;
+  chatLogAll=[];chatLogFiltered=[];chatLogLastDoc=null;chatLogHasMore=true;chatLogLoaded=false;
+  const clSel=document.getElementById('cl-station');if(clSel)clSel.dataset.filled='';
+  if(typeof eventsUnsubscribe==='function'){eventsUnsubscribe();eventsUnsubscribe=null;}
+  if(typeof ttUnsubscribe==='function'){ttUnsubscribe();ttUnsubscribe=null;}
+  if(typeof calUnsubscribe==='function'){calUnsubscribe();calUnsubscribe=null;}
+  if(typeof soundUnsubscribe==='function'){soundUnsubscribe();soundUnsubscribe=null;}
+  sessionStorage.removeItem('tmrt_session_user');
+  sessionStorage.removeItem('tmrt_session_dt');
+  CU=null;eventsInitialized=false;knownEventIds.clear();
+  LOGS=[];historyData=[];TT_VERSIONS=[];calOvr={};events=[];ttMode='auto';document.getElementById('main-screen').style.display='none';document.getElementById('login-screen').style.display='flex';document.getElementById('l-acc').value='';document.getElementById('l-pwd').value='';document.getElementById('l-err').textContent='';document.getElementById('l-attempt').textContent='';}}
+function uploadLogo(input){
+  const file=input.files[0];if(!file)return;
+  const url=URL.createObjectURL(file);
+  const img=document.getElementById('logo-img');
+  if(img){img.src=url;}
+}
+
+/* ── 帳號管理 ── */
+function sortedAccountsList(){
+  const roleOrder={S:0,A:1,B:2};
+  const stationNum=st=>{
+    const m=String(st||'').match(/G(\d+)/);
+    if(m)return parseInt(m[1]);
+    return 9999;/* 北段辦/南段辦等非車站排最後 */
+  };
+  return [...ACCOUNTS].sort((a,b)=>{
+    const r=(roleOrder[a.role]??9)-(roleOrder[b.role]??9);
+    if(r!==0)return r;
+    return stationNum(a.station)-stationNum(b.station);
+  });
+}
+function renderAccounts(){
+  const rb={S:'badge-purple',A:'badge-blue',B:'badge-gray'};
+  const tbody=document.getElementById('accounts-body');if(!tbody)return;
+  tbody.innerHTML=sortedAccountsList().map(u=>`
+    <tr>
+      <td style="width:32px"><input type="checkbox" class="acc-chk" data-id="${u.id}" data-role="${u.role}" style="cursor:pointer" onclick="updateAccBatchBar()"></td>
+      <td style="font-weight:500">${u.username}</td>
+      <td>${u.name}</td>
+      <td>${u.station}</td>
+      <td><span class="badge ${rb[u.role]||'badge-gray'}">${u.role}</span></td>
+      <td><span style="font-size:12px;font-family:var(--font-mono);background:var(--color-background-secondary);padding:2px 6px;border-radius:var(--border-radius-md)">${u.password}</span></td>
+      <td style="font-size:11px">${u.ip?'<span style="font-family:var(--font-mono)">'+ u.ip +'</span>':'<span style="color:var(--color-text-tertiary)">不限制</span>'}</td>
+      <td><span class="badge ${u.status==='啟用'?'badge-green':'badge-gray'}">${u.status}</span></td>
+      <td style="white-space:nowrap">
+        <div style="display:flex;gap:3px">
+          <button class="btn btn-sm" onclick="openAccEdit('${u.id}')"><i class="ti ti-edit"></i></button>
+          <button class="btn btn-sm" style="color:#E8861A;border-color:#E8861A;${u.role==='S'?'visibility:hidden;pointer-events:none':''}" onclick="${u.role==='S'?'':"resetDevice('"+u.id+"')"}" title="重置裝置綁定"><i class="ti ti-device-mobile-off"></i></button>
+          <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" onclick="deleteAcc('${u.id}')"><i class="ti ti-trash"></i></button>
+        </div>
+      </td>
+    </tr>`).join('');
+  /* 更新批次操作列 */
+  updateAccBatchBar();
+}
+function openAccModal(){
+  document.getElementById('acc-edit-id').value='';
+  document.getElementById('acc-modal-title').textContent='新增帳號';
+  document.getElementById('acc-username').value='';
+  document.getElementById('acc-name').value='';
+  document.getElementById('acc-pwd').value='';
+  document.getElementById('acc-station').value='';
+  document.getElementById('acc-role').value='B';
+  document.getElementById('acc-ip').value='';
+  document.getElementById('modal-acc').classList.add('open');
+}
+function openAccEdit(id){
+  const u=ACCOUNTS.find(x=>x.id===id);if(!u)return;
+  document.getElementById('acc-edit-id').value=id;
+  document.getElementById('acc-modal-title').textContent='編輯帳號';
+  document.getElementById('acc-username').value=u.username;
+  document.getElementById('acc-name').value=u.name;
+  document.getElementById('acc-pwd').value=u.password;
+  document.getElementById('acc-station').value=u.station;
+  document.getElementById('acc-role').value=u.role;
+  document.getElementById('acc-ip').value=u.ip;
+  document.getElementById('modal-acc').classList.add('open');
+}
+function saveAcc(){
+  const eid=document.getElementById('acc-edit-id').value;
+  const uname=document.getElementById('acc-username').value.trim();
+  const name=document.getElementById('acc-name').value.trim();
+  const pwd=document.getElementById('acc-pwd').value;
+  const station=document.getElementById('acc-station').value.trim();
+  const role=document.getElementById('acc-role').value;
+  const ip=document.getElementById('acc-ip').value.trim();
+  if(!uname||!name||!pwd||!station){showToast('請填寫所有必填欄位');return;}
+  if(eid){
+    const u=ACCOUNTS.find(x=>x.id===eid);if(!u)return;
+    u.username=uname;u.name=name;u.password=pwd;u.station=station;u.role=role;u.ip=ip;
+    updateAccInDb(u);
+  } else {
+    const newU={id:'a'+nextAccId++,username:uname,name,password:pwd,station,role,ip,status:'啟用',lastLogin:'—',lastLoginIp:'—'};
+    ACCOUNTS.push(newU);
+    saveAccToDb(newU);
+  }
+  document.getElementById('modal-acc').classList.remove('open');
+  renderAccounts();showToast('帳號已儲存');
+}
+function deleteAcc(id){
+  if(id==='a1'){showToast('無法刪除主要管理員帳號');return;}
+  if(confirm('確定刪除此帳號？')){deleteAccFromDb(id);ACCOUNTS=ACCOUNTS.filter(u=>u.id!==id);renderAccounts();showToast('帳號已刪除');}
+}
+/* ── 帳號批次操作 ── */
+function getSelectedAccIds(){
+  return [...document.querySelectorAll('.acc-chk:checked')].map(el=>el.dataset.id);
+}
+function updateAccBatchBar(){
+  const ids=getSelectedAccIds();
+  const bar=document.getElementById('acc-batch-bar');
+  const cnt=document.getElementById('acc-batch-count');
+  if(bar){bar.style.display=ids.length?'flex':'none';}
+  if(cnt)cnt.textContent='已選取 '+ids.length+' 筆';
+  const allChk=document.getElementById('acc-chk-all');
+  const total=document.querySelectorAll('.acc-chk').length;
+  if(allChk)allChk.indeterminate=ids.length>0&&ids.length<total;
+  if(allChk&&ids.length===total&&total>0)allChk.checked=true;
+}
+function toggleAllAcc(cb){
+  document.querySelectorAll('.acc-chk').forEach(el=>{el.checked=cb.checked;});
+  updateAccBatchBar();
+}
+function clearAccSelection(){
+  document.querySelectorAll('.acc-chk').forEach(el=>{el.checked=false;});
+  const allChk=document.getElementById('acc-chk-all');
+  if(allChk){allChk.checked=false;allChk.indeterminate=false;}
+  updateAccBatchBar();
+}
+async function batchDeleteAcc(){
+  const ids=getSelectedAccIds();
+  if(!ids.length)return;
+  const names=ids.map(id=>{const u=ACCOUNTS.find(x=>x.id===id);return u?u.name:id;}).join('、');
+  if(!confirm('確定刪除以下帳號？\n'+names))return;
+  for(const id of ids){
+    if(id==='a1'){showToast('跳過主要管理員帳號');continue;}
+    await deleteAccFromDb(id);
+    ACCOUNTS=ACCOUNTS.filter(u=>u.id!==id);
+  }
+  renderAccounts();showToast('已刪除 '+ids.length+' 個帳號');
+}
+async function batchResetDevice(){
+  const ids=getSelectedAccIds().filter(id=>{const u=ACCOUNTS.find(x=>x.id===id);return u&&u.role!=='S';});
+  if(!ids.length){showToast('請選取非S級帳號');return;}
+  const names=ids.map(id=>{const u=ACCOUNTS.find(x=>x.id===id);return u?u.name:id;}).join('、');
+  if(!confirm('確定重置以下帳號的裝置綁定？\n'+names))return;
+  for(const id of ids){
+    const u=ACCOUNTS.find(x=>x.id===id);
+    if(!u)continue;
+    u.deviceToken='';
+    await updateAccInDb(u);
+  }
+  showToast('已重置 '+ids.length+' 個帳號的裝置綁定');
+}
+
+async function resetDevice(id){
+  const u=ACCOUNTS.find(x=>x.id===id);if(!u)return;
+  if(!confirm('確定重置「'+u.name+'」的裝置綁定？\n該帳號下次登入時將自動綁定新裝置。'))return;
+  u.deviceToken='';
+  await updateAccInDb(u);
+  showToast('裝置綁定已重置，'+u.name+'下次登入將重新綁定');
+  addLog('edit','重置裝置綁定：'+u.username+' ('+u.name+')');
+}
+
+/* ── 站碼順序 ── */
+const ST_ORDER=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
+const SN={G0:'北屯總站',G3:'舊社',G4:'松竹',G5:'四維國小',G6:'文心崇德',G7:'文心中清',G8:'文華高中',G8a:'文心櫻花',G9:'市政府',G10:'水安宮',G10a:'文心森林公園',G11:'南屯',G12:'豐樂公園',G13:'大慶',G14:'九張犁',G15:'九德',G16:'烏日',G17:'高鐵臺中站'};
+function calcDir(from,to){const fi=ST_ORDER.indexOf(from),ti=ST_ORDER.indexOf(to);if(fi===-1||ti===-1||fi===ti)return'down';return ti>fi?'down':'up';}
+
+/* ── 時刻表 ── */
+const TD={'G0':["06:00", "06:08", "06:16", "06:22", "06:28", "06:34", "06:40", "06:46", "06:52", "06:58", "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58", "08:04", "08:10", "08:16", "08:22", "08:28", "08:34", "08:40", "08:46", "08:52", "08:58", "09:05", "09:13", "09:22", "09:31", "09:40", "09:49", "09:58", "10:07", "10:16", "10:25", "10:34", "10:43", "10:52", "11:01", "11:10", "11:19", "11:28", "11:37", "11:46", "11:55", "12:04", "12:13", "12:22", "12:31", "12:40", "12:49", "12:58", "13:07", "13:16", "13:25", "13:34", "13:43", "13:52", "14:01", "14:10", "14:19", "14:28", "14:37", "14:46", "14:55", "15:04", "15:13", "15:22", "15:31", "15:40", "15:47", "15:53", "15:59", "16:05", "16:11", "16:17", "16:23", "16:29", "16:35", "16:41", "16:47", "16:53", "16:59", "17:05", "17:11", "17:17", "17:23", "17:29", "17:35", "17:41", "17:47", "17:53", "17:59", "18:04", "18:09", "18:14", "18:19", "18:24", "18:29", "18:35", "18:41", "18:47", "18:53", "18:59", "19:05", "19:12", "19:21", "19:30", "19:39", "19:48", "19:57", "20:06", "20:15", "20:24", "20:33", "20:42", "20:51", "21:00", "21:09", "21:18", "21:27", "21:36", "21:45", "21:54", "22:03", "22:12", "22:21", "22:30", "22:39", "22:48", "22:57", "23:06", "23:20", "23:40", "00:00"],'G3':["06:02", "06:10", "06:18", "06:24", "06:30", "06:36", "06:42", "06:48", "06:54", "07:00", "07:06", "07:12", "07:18", "07:24", "07:30", "07:36", "07:42", "07:48", "07:54", "08:00", "08:06", "08:12", "08:18", "08:24", "08:30", "08:36", "08:42", "08:48", "08:54", "09:00", "09:07", "09:15", "09:24", "09:33", "09:42", "09:51", "10:00", "10:09", "10:18", "10:27", "10:36", "10:45", "10:54", "11:03", "11:12", "11:21", "11:30", "11:39", "11:48", "11:57", "12:06", "12:15", "12:24", "12:33", "12:42", "12:51", "13:00", "13:09", "13:18", "13:27", "13:36", "13:45", "13:54", "14:03", "14:12", "14:21", "14:30", "14:39", "14:48", "14:57", "15:06", "15:15", "15:24", "15:33", "15:42", "15:49", "15:55", "16:01", "16:07", "16:13", "16:19", "16:25", "16:31", "16:37", "16:43", "16:49", "16:55", "17:01", "17:07", "17:13", "17:19", "17:25", "17:31", "17:37", "17:43", "17:49", "17:55", "18:01", "18:06", "18:11", "18:16", "18:21", "18:26", "18:31", "18:37", "18:43", "18:49", "18:55", "19:01", "19:07", "19:14", "19:23", "19:32", "19:41", "19:50", "19:59", "20:08", "20:17", "20:26", "20:35", "20:44", "20:53", "21:02", "21:11", "21:20", "21:29", "21:38", "21:47", "21:56", "22:05", "22:14", "22:23", "22:32", "22:41", "22:50", "22:59", "23:08", "23:22", "23:42", "00:02"],'G4':["06:04", "06:12", "06:20", "06:26", "06:32", "06:38", "06:44", "06:50", "06:56", "07:02", "07:08", "07:14", "07:20", "07:26", "07:32", "07:38", "07:44", "07:50", "07:56", "08:02", "08:08", "08:14", "08:20", "08:26", "08:32", "08:38", "08:44", "08:50", "08:56", "09:02", "09:09", "09:17", "09:26", "09:35", "09:44", "09:53", "10:02", "10:11", "10:20", "10:29", "10:38", "10:47", "10:56", "11:05", "11:14", "11:23", "11:32", "11:41", "11:50", "11:59", "12:08", "12:17", "12:26", "12:35", "12:44", "12:53", "13:02", "13:11", "13:20", "13:29", "13:38", "13:47", "13:56", "14:05", "14:14", "14:23", "14:32", "14:41", "14:50", "14:59", "15:08", "15:17", "15:26", "15:35", "15:44", "15:51", "15:57", "16:03", "16:09", "16:15", "16:21", "16:27", "16:33", "16:39", "16:45", "16:51", "16:57", "17:03", "17:09", "17:15", "17:21", "17:27", "17:33", "17:39", "17:45", "17:51", "17:57", "18:03", "18:08", "18:13", "18:18", "18:23", "18:28", "18:33", "18:39", "18:45", "18:51", "18:57", "19:03", "19:09", "19:16", "19:25", "19:34", "19:43", "19:52", "20:01", "20:10", "20:19", "20:28", "20:37", "20:46", "20:55", "21:04", "21:13", "21:22", "21:31", "21:40", "21:49", "21:58", "22:07", "22:16", "22:25", "22:34", "22:43", "22:52", "23:01", "23:10", "23:24", "23:44", "00:04"],'G5':["06:00", "06:07", "06:15", "06:23", "06:29", "06:35", "06:41", "06:47", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:12", "09:20", "09:29", "09:38", "09:47", "09:56", "10:05", "10:14", "10:23", "10:32", "10:41", "10:50", "10:59", "11:08", "11:17", "11:26", "11:35", "11:44", "11:53", "12:02", "12:11", "12:20", "12:29", "12:38", "12:47", "12:56", "13:05", "13:14", "13:23", "13:32", "13:41", "13:50", "13:59", "14:08", "14:17", "14:26", "14:35", "14:44", "14:53", "15:02", "15:11", "15:20", "15:29", "15:38", "15:47", "15:54", "16:00", "16:06", "16:12", "16:18", "16:24", "16:30", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:42", "17:48", "17:54", "18:00", "18:06", "18:11", "18:16", "18:21", "18:26", "18:31", "18:36", "18:42", "18:48", "18:54", "19:00", "19:06", "19:12", "19:19", "19:28", "19:37", "19:46", "19:55", "20:04", "20:13", "20:22", "20:31", "20:40", "20:49", "20:58", "21:07", "21:16", "21:25", "21:34", "21:43", "21:52", "22:01", "22:10", "22:19", "22:28", "22:37", "22:46", "22:55", "23:04", "23:13", "23:27", "23:47", "00:07"],'G6':["06:01", "06:09", "06:17", "06:25", "06:31", "06:37", "06:43", "06:49", "06:55", "07:01", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:14", "09:22", "09:31", "09:40", "09:49", "09:58", "10:07", "10:16", "10:25", "10:34", "10:43", "10:52", "11:01", "11:10", "11:19", "11:28", "11:37", "11:46", "11:55", "12:04", "12:13", "12:22", "12:31", "12:40", "12:49", "12:58", "13:07", "13:16", "13:25", "13:34", "13:43", "13:52", "14:01", "14:10", "14:19", "14:28", "14:37", "14:46", "14:55", "15:04", "15:13", "15:22", "15:31", "15:40", "15:49", "15:56", "16:02", "16:08", "16:14", "16:20", "16:26", "16:32", "16:38", "16:44", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:44", "17:50", "17:56", "18:02", "18:08", "18:13", "18:18", "18:23", "18:28", "18:33", "18:38", "18:44", "18:50", "18:56", "19:02", "19:08", "19:14", "19:21", "19:30", "19:39", "19:48", "19:57", "20:06", "20:15", "20:24", "20:33", "20:42", "20:51", "21:00", "21:09", "21:18", "21:27", "21:36", "21:45", "21:54", "22:03", "22:12", "22:21", "22:30", "22:39", "22:48", "22:57", "23:06", "23:15", "23:29", "23:49", "00:09"],'G7':["06:04", "06:11", "06:19", "06:27", "06:33", "06:39", "06:45", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:16", "09:24", "09:33", "09:42", "09:51", "10:00", "10:09", "10:18", "10:27", "10:36", "10:45", "10:54", "11:03", "11:12", "11:21", "11:30", "11:39", "11:48", "11:57", "12:06", "12:15", "12:24", "12:33", "12:42", "12:51", "13:00", "13:09", "13:18", "13:27", "13:36", "13:45", "13:54", "14:03", "14:12", "14:21", "14:30", "14:39", "14:48", "14:57", "15:06", "15:15", "15:24", "15:33", "15:42", "15:51", "15:58", "16:04", "16:10", "16:16", "16:22", "16:28", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:46", "17:52", "17:58", "18:04", "18:10", "18:15", "18:20", "18:25", "18:30", "18:35", "18:40", "18:46", "18:52", "18:58", "19:04", "19:10", "19:16", "19:23", "19:32", "19:41", "19:50", "19:59", "20:08", "20:17", "20:26", "20:35", "20:44", "20:53", "21:02", "21:11", "21:20", "21:29", "21:38", "21:47", "21:56", "22:05", "22:14", "22:23", "22:32", "22:41", "22:50", "22:59", "23:08", "23:17", "23:31", "23:51", "00:11"],'G8':["06:06", "06:13", "06:21", "06:29", "06:35", "06:41", "06:47", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:18", "09:26", "09:35", "09:44", "09:53", "10:02", "10:11", "10:20", "10:29", "10:38", "10:47", "10:56", "11:05", "11:14", "11:23", "11:32", "11:41", "11:50", "11:59", "12:08", "12:17", "12:26", "12:35", "12:44", "12:53", "13:02", "13:11", "13:20", "13:29", "13:38", "13:47", "13:56", "14:05", "14:14", "14:23", "14:32", "14:41", "14:50", "14:59", "15:08", "15:17", "15:26", "15:35", "15:44", "15:53", "16:00", "16:06", "16:12", "16:18", "16:24", "16:30", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:42", "17:48", "17:54", "18:00", "18:06", "18:12", "18:17", "18:22", "18:27", "18:32", "18:37", "18:42", "18:48", "18:54", "19:00", "19:06", "19:12", "19:18", "19:25", "19:34", "19:43", "19:52", "20:01", "20:10", "20:19", "20:28", "20:37", "20:46", "20:55", "21:04", "21:13", "21:22", "21:31", "21:40", "21:49", "21:58", "22:07", "22:16", "22:25", "22:34", "22:43", "22:52", "23:01", "23:10", "23:19", "23:33", "23:53", "00:13"],'G8a':["06:07", "06:15", "06:23", "06:31", "06:37", "06:43", "06:49", "06:55", "07:01", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:20", "09:28", "09:37", "09:46", "09:55", "10:04", "10:13", "10:22", "10:31", "10:40", "10:49", "10:58", "11:07", "11:16", "11:25", "11:34", "11:43", "11:52", "12:01", "12:10", "12:19", "12:28", "12:37", "12:46", "12:55", "13:04", "13:13", "13:22", "13:31", "13:40", "13:49", "13:58", "14:07", "14:16", "14:25", "14:34", "14:43", "14:52", "15:01", "15:10", "15:19", "15:28", "15:37", "15:46", "15:55", "16:02", "16:08", "16:14", "16:20", "16:26", "16:32", "16:38", "16:44", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:44", "17:50", "17:56", "18:02", "18:08", "18:14", "18:19", "18:24", "18:29", "18:34", "18:39", "18:44", "18:50", "18:56", "19:02", "19:08", "19:14", "19:20", "19:27", "19:36", "19:45", "19:54", "20:03", "20:12", "20:21", "20:30", "20:39", "20:48", "20:57", "21:06", "21:15", "21:24", "21:33", "21:42", "21:51", "22:00", "22:09", "22:18", "22:27", "22:36", "22:45", "22:54", "23:03", "23:12", "23:21", "23:35", "23:55", "00:15"],'G9':["06:00", "06:09", "06:17", "06:25", "06:33", "06:39", "06:45", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:22", "09:30", "09:39", "09:48", "09:57", "10:06", "10:15", "10:24", "10:33", "10:42", "10:51", "11:00", "11:09", "11:18", "11:27", "11:36", "11:45", "11:54", "12:03", "12:12", "12:21", "12:30", "12:39", "12:48", "12:57", "13:06", "13:15", "13:24", "13:33", "13:42", "13:51", "14:00", "14:09", "14:18", "14:27", "14:36", "14:45", "14:54", "15:03", "15:12", "15:21", "15:30", "15:39", "15:48", "15:57", "16:04", "16:10", "16:16", "16:22", "16:28", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:46", "17:52", "17:58", "18:04", "18:10", "18:16", "18:21", "18:26", "18:31", "18:36", "18:41", "18:46", "18:52", "18:58", "19:04", "19:10", "19:16", "19:22", "19:29", "19:38", "19:47", "19:56", "20:05", "20:14", "20:23", "20:32", "20:41", "20:50", "20:59", "21:08", "21:17", "21:26", "21:35", "21:44", "21:53", "22:02", "22:11", "22:20", "22:29", "22:38", "22:47", "22:56", "23:05", "23:14", "23:23", "23:37", "23:57", "00:17"],'G10':["06:02", "06:12", "06:19", "06:27", "06:35", "06:41", "06:47", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:24", "09:32", "09:41", "09:50", "09:59", "10:08", "10:17", "10:26", "10:35", "10:44", "10:53", "11:02", "11:11", "11:20", "11:29", "11:38", "11:47", "11:56", "12:05", "12:14", "12:23", "12:32", "12:41", "12:50", "12:59", "13:08", "13:17", "13:26", "13:35", "13:44", "13:53", "14:02", "14:11", "14:20", "14:29", "14:38", "14:47", "14:56", "15:05", "15:14", "15:23", "15:32", "15:41", "15:50", "15:59", "16:06", "16:12", "16:18", "16:24", "16:30", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:42", "17:48", "17:54", "18:00", "18:06", "18:12", "18:18", "18:23", "18:28", "18:33", "18:38", "18:43", "18:48", "18:54", "19:00", "19:06", "19:12", "19:18", "19:24", "19:31", "19:40", "19:49", "19:58", "20:07", "20:16", "20:25", "20:34", "20:43", "20:52", "21:01", "21:10", "21:19", "21:28", "21:37", "21:46", "21:55", "22:04", "22:13", "22:22", "22:31", "22:40", "22:49", "22:58", "23:07", "23:16", "23:25", "23:39", "23:59", "00:19"],'G10a':["06:04", "06:14", "06:21", "06:29", "06:37", "06:43", "06:49", "06:55", "07:01", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:19", "09:26", "09:34", "09:43", "09:52", "10:01", "10:10", "10:19", "10:28", "10:37", "10:46", "10:55", "11:04", "11:13", "11:22", "11:31", "11:40", "11:49", "11:58", "12:07", "12:16", "12:25", "12:34", "12:43", "12:52", "13:01", "13:10", "13:19", "13:28", "13:37", "13:46", "13:55", "14:04", "14:13", "14:22", "14:31", "14:40", "14:49", "14:58", "15:07", "15:16", "15:25", "15:34", "15:43", "15:52", "16:01", "16:08", "16:14", "16:20", "16:26", "16:32", "16:38", "16:44", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:44", "17:50", "17:56", "18:02", "18:08", "18:14", "18:20", "18:25", "18:30", "18:35", "18:40", "18:45", "18:50", "18:56", "19:02", "19:08", "19:14", "19:20", "19:26", "19:33", "19:42", "19:51", "20:00", "20:09", "20:18", "20:27", "20:36", "20:45", "20:54", "21:03", "21:12", "21:21", "21:30", "21:39", "21:48", "21:57", "22:06", "22:15", "22:24", "22:33", "22:42", "22:51", "23:00", "23:09", "23:18", "23:27", "23:41", "00:01", "00:21"],'G11':["06:05", "06:15", "06:23", "06:31", "06:39", "06:45", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:28", "09:36", "09:45", "09:54", "10:03", "10:12", "10:21", "10:30", "10:39", "10:48", "10:57", "11:06", "11:15", "11:24", "11:33", "11:42", "11:51", "12:00", "12:09", "12:18", "12:27", "12:36", "12:45", "12:54", "13:03", "13:12", "13:21", "13:30", "13:39", "13:48", "13:57", "14:06", "14:15", "14:24", "14:33", "14:42", "14:51", "15:00", "15:09", "15:18", "15:27", "15:36", "15:45", "15:54", "16:03", "16:10", "16:16", "16:22", "16:28", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:46", "17:52", "17:58", "18:04", "18:10", "18:16", "18:22", "18:27", "18:32", "18:37", "18:42", "18:47", "18:52", "18:58", "19:04", "19:10", "19:16", "19:22", "19:28", "19:35", "19:44", "19:53", "20:02", "20:11", "20:20", "20:29", "20:38", "20:47", "20:56", "21:05", "21:14", "21:23", "21:32", "21:41", "21:50", "21:59", "22:08", "22:17", "22:26", "22:35", "22:44", "22:53", "23:02", "23:11", "23:20", "23:29", "23:43", "00:03", "00:22"],'G12':["06:07", "06:17", "06:24", "06:32", "06:40", "06:46", "06:52", "06:58", "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58", "08:04", "08:10", "08:16", "08:22", "08:28", "08:34", "08:40", "08:46", "08:52", "08:58", "09:04", "09:10", "09:16", "09:22", "09:29", "09:37", "09:46", "09:55", "10:04", "10:13", "10:22", "10:31", "10:40", "10:49", "10:58", "11:07", "11:16", "11:25", "11:34", "11:43", "11:52", "12:01", "12:10", "12:19", "12:28", "12:37", "12:46", "12:55", "13:04", "13:13", "13:22", "13:31", "13:40", "13:49", "13:58", "14:07", "14:16", "14:25", "14:34", "14:43", "14:52", "15:01", "15:10", "15:19", "15:28", "15:37", "15:46", "15:55", "16:04", "16:11", "16:18", "16:24", "16:30", "16:36", "16:41", "16:47", "16:53", "16:59", "17:05", "17:11", "17:18", "17:24", "17:30", "17:36", "17:41", "17:47", "17:53", "17:59", "18:05", "18:11", "18:17", "18:23", "18:28", "18:33", "18:38", "18:43", "18:48", "18:53", "18:59", "19:05", "19:11", "19:17", "19:23", "19:29", "19:36", "19:45", "19:54", "20:03", "20:12", "20:21", "20:30", "20:39", "20:48", "20:57", "21:06", "21:15", "21:24", "21:33", "21:42", "21:51", "22:00", "22:09", "22:18", "22:27", "22:36", "22:45", "22:54", "23:03", "23:12", "23:21", "23:30", "23:44", "00:04", "00:24"],'G13':["06:00", "06:10", "06:20", "06:28", "06:36", "06:44", "06:50", "06:56", "07:02", "07:08", "07:14", "07:20", "07:26", "07:32", "07:38", "07:44", "07:50", "07:56", "08:02", "08:08", "08:14", "08:20", "08:26", "08:32", "08:38", "08:44", "08:50", "08:56", "09:02", "09:08", "09:14", "09:20", "09:26", "09:33", "09:41", "09:50", "09:59", "10:08", "10:17", "10:26", "10:35", "10:44", "10:53", "11:02", "11:11", "11:20", "11:29", "11:38", "11:47", "11:56", "12:05", "12:14", "12:23", "12:32", "12:41", "12:50", "12:59", "13:08", "13:17", "13:26", "13:35", "13:44", "13:53", "14:02", "14:11", "14:20", "14:29", "14:38", "14:47", "14:56", "15:05", "15:14", "15:23", "15:32", "15:41", "15:50", "15:59", "16:08", "16:15", "16:21", "16:27", "16:33", "16:39", "16:45", "16:51", "16:57", "17:03", "17:09", "17:15", "17:21", "17:27", "17:33", "17:39", "17:45", "17:51", "17:57", "18:03", "18:09", "18:15", "18:21", "18:27", "18:32", "18:37", "18:42", "18:47", "18:52", "18:57", "19:03", "19:09", "19:15", "19:21", "19:27", "19:33", "19:40", "19:49", "19:58", "20:07", "20:16", "20:25", "20:34", "20:43", "20:52", "21:01", "21:10", "21:19", "21:28", "21:37", "21:46", "21:55", "22:04", "22:13", "22:22", "22:31", "22:40", "22:49", "22:58", "23:07", "23:16", "23:25", "23:34", "23:48", "00:08", "00:27"],'G14':["06:01", "06:12", "06:22", "06:29", "06:37", "06:45", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:27", "09:34", "09:42", "09:51", "10:00", "10:09", "10:18", "10:27", "10:36", "10:45", "10:54", "11:03", "11:12", "11:21", "11:30", "11:39", "11:48", "11:57", "12:06", "12:15", "12:24", "12:33", "12:42", "12:51", "13:00", "13:09", "13:18", "13:27", "13:36", "13:45", "13:54", "14:03", "14:12", "14:21", "14:30", "14:39", "14:48", "14:57", "15:06", "15:15", "15:24", "15:33", "15:42", "15:51", "16:00", "16:09", "16:16", "16:22", "16:28", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:46", "17:52", "17:58", "18:04", "18:10", "18:16", "18:22", "18:28", "18:33", "18:38", "18:43", "18:48", "18:53", "18:58", "19:04", "19:10", "19:16", "19:22", "19:28", "19:34", "19:41", "19:50", "19:59", "20:08", "20:17", "20:26", "20:35", "20:44", "20:53", "21:02", "21:11", "21:20", "21:29", "21:38", "21:47", "21:56", "22:05", "22:14", "22:23", "22:32", "22:41", "22:50", "22:59", "23:08", "23:17", "23:26", "23:35", "23:49", "00:09", "00:29"],'G15':["06:03", "06:14", "06:24", "06:31", "06:39", "06:47", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:23", "09:29", "09:36", "09:44", "09:53", "10:02", "10:11", "10:20", "10:29", "10:38", "10:47", "10:56", "11:05", "11:14", "11:23", "11:32", "11:41", "11:50", "11:59", "12:08", "12:17", "12:26", "12:35", "12:44", "12:53", "13:02", "13:11", "13:20", "13:29", "13:38", "13:47", "13:56", "14:05", "14:14", "14:23", "14:32", "14:41", "14:50", "14:59", "15:08", "15:17", "15:26", "15:35", "15:44", "15:53", "16:02", "16:11", "16:18", "16:24", "16:30", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:42", "17:48", "17:54", "18:00", "18:06", "18:12", "18:18", "18:24", "18:30", "18:35", "18:40", "18:45", "18:50", "18:55", "19:00", "19:06", "19:12", "19:18", "19:24", "19:30", "19:36", "19:43", "19:52", "20:01", "20:10", "20:19", "20:28", "20:37", "20:46", "20:55", "21:04", "21:13", "21:22", "21:31", "21:40", "21:49", "21:58", "22:07", "22:16", "22:25", "22:34", "22:43", "22:52", "23:01", "23:10", "23:19", "23:28", "23:37", "23:51", "00:11", "00:30"],'G16':["06:05", "06:16", "06:25", "06:33", "06:41", "06:49", "06:55", "07:01", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:19", "09:25", "09:31", "09:38", "09:46", "09:55", "10:04", "10:13", "10:22", "10:31", "10:40", "10:49", "10:58", "11:07", "11:16", "11:25", "11:34", "11:43", "11:52", "12:01", "12:10", "12:19", "12:28", "12:37", "12:46", "12:55", "13:04", "13:13", "13:22", "13:31", "13:40", "13:49", "13:58", "14:07", "14:16", "14:25", "14:34", "14:43", "14:52", "15:01", "15:10", "15:19", "15:28", "15:37", "15:46", "15:55", "16:04", "16:13", "16:20", "16:26", "16:32", "16:38", "16:44", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:44", "17:50", "17:56", "18:02", "18:08", "18:14", "18:20", "18:26", "18:32", "18:37", "18:42", "18:47", "18:52", "18:57", "19:02", "19:08", "19:14", "19:20", "19:26", "19:32", "19:38", "19:45", "19:54", "20:03", "20:12", "20:21", "20:30", "20:39", "20:48", "20:57", "21:06", "21:15", "21:24", "21:33", "21:42", "21:51", "22:00", "22:09", "22:18", "22:27", "22:36", "22:45", "22:54", "23:03", "23:12", "23:21", "23:30", "23:39", "23:53", "00:13", "00:32"],'G17':["06:07", "06:18", "06:28", "06:35", "06:43", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:27", "09:33", "09:40", "09:48", "09:57", "10:06", "10:15", "10:24", "10:33", "10:42", "10:51", "11:00", "11:09", "11:18", "11:27", "11:36", "11:45", "11:54", "12:03", "12:12", "12:21", "12:30", "12:39", "12:48", "12:57", "13:06", "13:15", "13:24", "13:33", "13:42", "13:51", "14:00", "14:09", "14:18", "14:27", "14:36", "14:45", "14:54", "15:03", "15:12", "15:21", "15:30", "15:39", "15:48", "15:57", "16:06", "16:15", "16:22", "16:28", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:46", "17:52", "17:58", "18:04", "18:10", "18:16", "18:22", "18:28", "18:34", "18:39", "18:44", "18:49", "18:54", "18:59", "19:04", "19:10", "19:16", "19:22", "19:28", "19:34", "19:40", "19:47", "19:56", "20:05", "20:14", "20:23", "20:32", "20:41", "20:50", "20:59", "21:08", "21:17", "21:26", "21:35", "21:44", "21:53", "22:02", "22:11", "22:20", "22:29", "22:38", "22:47", "22:56", "23:05", "23:14", "23:23", "23:32", "23:41", "23:55", "00:15", "00:35"]};
+const TU={'G0':["06:06", "06:16", "06:27", "06:34", "06:42", "06:50", "06:59", "07:07", "07:13", "07:20", "07:26", "07:32", "07:38", "07:44", "07:50", "07:56", "08:02", "08:08", "08:14", "08:20", "08:26", "08:32", "08:38", "08:44", "08:50", "08:56", "09:02", "09:08", "09:14", "09:20", "09:26", "09:32", "09:38", "09:44", "09:50", "09:56", "10:03", "10:12", "10:21", "10:30", "10:39", "10:48", "10:57", "11:06", "11:15", "11:24", "11:33", "11:42", "11:51", "12:00", "12:09", "12:18", "12:27", "12:36", "12:45", "12:54", "13:03", "13:12", "13:21", "13:30", "13:39", "13:48", "13:57", "14:06", "14:15", "14:24", "14:33", "14:42", "14:51", "15:00", "15:09", "15:18", "15:27", "15:36", "15:45", "15:54", "16:03", "16:12", "16:21", "16:30", "16:39", "16:48", "16:57", "17:03", "17:09", "17:15", "17:21", "17:27", "17:33", "17:39", "17:45", "17:51", "17:57", "18:02", "18:07", "18:11", "18:16", "18:21", "18:26", "18:32", "18:38", "18:43", "18:49", "18:55", "19:01", "19:07", "19:13", "19:19", "19:25", "19:31", "19:37", "19:43", "19:49", "19:55", "20:01", "20:07", "20:13", "20:20", "20:29", "20:38", "20:47", "20:56", "21:05", "21:14", "21:23", "21:32", "21:41", "21:50", "21:59", "22:08", "22:17", "22:26", "22:35", "22:44", "22:53", "23:02", "23:11", "23:20", "23:29", "23:38", "23:47", "23:56", "00:05", "00:14", "00:23", "00:34", "00:49"],'G3':["06:04", "06:14", "06:25", "06:32", "06:40", "06:48", "06:57", "07:05", "07:11", "07:18", "07:24", "07:30", "07:36", "07:42", "07:48", "07:54", "08:00", "08:06", "08:12", "08:18", "08:24", "08:30", "08:36", "08:42", "08:48", "08:54", "09:00", "09:06", "09:12", "09:18", "09:24", "09:30", "09:36", "09:42", "09:48", "09:54", "10:01", "10:10", "10:19", "10:28", "10:37", "10:46", "10:55", "11:04", "11:13", "11:22", "11:31", "11:40", "11:49", "11:58", "12:07", "12:16", "12:25", "12:34", "12:43", "12:52", "13:01", "13:10", "13:19", "13:28", "13:37", "13:46", "13:55", "14:04", "14:13", "14:22", "14:31", "14:40", "14:49", "14:58", "15:07", "15:16", "15:25", "15:34", "15:43", "15:52", "16:01", "16:10", "16:19", "16:28", "16:37", "16:46", "16:54", "17:01", "17:07", "17:13", "17:19", "17:25", "17:31", "17:37", "17:43", "17:49", "17:55", "18:00", "18:04", "18:09", "18:14", "18:19", "18:24", "18:30", "18:35", "18:41", "18:47", "18:53", "18:59", "19:05", "19:11", "19:17", "19:23", "19:29", "19:35", "19:41", "19:47", "19:53", "19:59", "20:05", "20:11", "20:18", "20:27", "20:36", "20:45", "20:54", "21:03", "21:12", "21:21", "21:30", "21:39", "21:48", "21:57", "22:06", "22:15", "22:24", "22:33", "22:42", "22:51", "23:00", "23:09", "23:18", "23:27", "23:36", "23:45", "23:54", "00:03", "00:12", "00:21", "00:32", "00:47"],'G4':["06:02", "06:12", "06:23", "06:30", "06:38", "06:46", "06:55", "07:03", "07:09", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58", "08:04", "08:10", "08:16", "08:22", "08:28", "08:34", "08:40", "08:46", "08:52", "08:58", "09:04", "09:10", "09:16", "09:22", "09:28", "09:34", "09:40", "09:46", "09:52", "09:59", "10:08", "10:17", "10:26", "10:35", "10:44", "10:53", "11:02", "11:11", "11:20", "11:29", "11:38", "11:47", "11:56", "12:05", "12:14", "12:23", "12:32", "12:41", "12:50", "12:59", "13:08", "13:17", "13:26", "13:35", "13:44", "13:53", "14:02", "14:11", "14:20", "14:29", "14:38", "14:47", "14:56", "15:05", "15:14", "15:23", "15:32", "15:41", "15:50", "15:59", "16:08", "16:17", "16:26", "16:35", "16:44", "16:53", "16:59", "17:05", "17:11", "17:17", "17:23", "17:29", "17:35", "17:41", "17:47", "17:53", "17:58", "18:03", "18:07", "18:12", "18:17", "18:22", "18:28", "18:34", "18:39", "18:45", "18:51", "18:57", "19:03", "19:09", "19:15", "19:21", "19:27", "19:33", "19:39", "19:45", "19:51", "19:57", "20:03", "20:09", "20:16", "20:25", "20:34", "20:43", "20:52", "21:01", "21:10", "21:19", "21:28", "21:37", "21:46", "21:55", "22:04", "22:13", "22:22", "22:31", "22:40", "22:49", "22:58", "23:07", "23:16", "23:25", "23:34", "23:43", "23:52", "00:01", "00:10", "00:19", "00:30", "00:45"],'G5':["06:00", "06:09", "06:20", "06:27", "06:35", "06:43", "06:52", "07:00", "07:06", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:19", "09:25", "09:31", "09:37", "09:43", "09:49", "09:56", "10:05", "10:14", "10:23", "10:32", "10:41", "10:50", "10:59", "11:08", "11:17", "11:26", "11:35", "11:44", "11:53", "12:02", "12:11", "12:20", "12:29", "12:38", "12:47", "12:56", "13:05", "13:14", "13:23", "13:32", "13:41", "13:50", "13:59", "14:08", "14:17", "14:26", "14:35", "14:44", "14:53", "15:02", "15:11", "15:20", "15:29", "15:38", "15:47", "15:56", "16:05", "16:14", "16:23", "16:32", "16:41", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:44", "17:50", "17:55", "17:59", "18:04", "18:09", "18:14", "18:19", "18:25", "18:30", "18:36", "18:42", "18:48", "18:54", "19:00", "19:06", "19:12", "19:18", "19:24", "19:30", "19:36", "19:42", "19:48", "19:54", "20:00", "20:06", "20:13", "20:22", "20:31", "20:40", "20:49", "20:58", "21:07", "21:16", "21:25", "21:34", "21:43", "21:52", "22:01", "22:10", "22:19", "22:28", "22:37", "22:46", "22:55", "23:04", "23:13", "23:22", "23:31", "23:40", "23:49", "23:58", "00:07", "00:16", "00:27", "00:42"],'G6':["06:07", "06:18", "06:26", "06:34", "06:42", "06:51", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:23", "09:29", "09:35", "09:41", "09:47", "09:55", "10:04", "10:13", "10:22", "10:31", "10:40", "10:49", "10:58", "11:07", "11:16", "11:25", "11:34", "11:43", "11:52", "12:01", "12:10", "12:19", "12:28", "12:37", "12:46", "12:55", "13:04", "13:13", "13:22", "13:31", "13:40", "13:49", "13:58", "14:07", "14:16", "14:25", "14:34", "14:43", "14:52", "15:01", "15:10", "15:19", "15:28", "15:37", "15:46", "15:55", "16:04", "16:13", "16:22", "16:31", "16:40", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:42", "17:48", "17:53", "17:58", "18:02", "18:07", "18:12", "18:17", "18:23", "18:29", "18:35", "18:41", "18:47", "18:53", "18:59", "19:05", "19:11", "19:17", "19:23", "19:29", "19:35", "19:41", "19:47", "19:53", "19:59", "20:05", "20:12", "20:21", "20:30", "20:39", "20:48", "20:57", "21:06", "21:15", "21:24", "21:33", "21:42", "21:51", "22:00", "22:09", "22:18", "22:27", "22:36", "22:45", "22:54", "23:03", "23:12", "23:21", "23:30", "23:39", "23:48", "23:57", "00:06", "00:15", "00:25", "00:40"],'G7':["06:05", "06:16", "06:23", "06:31", "06:39", "06:48", "06:56", "07:02", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:27", "09:33", "09:39", "09:45", "09:52", "10:01", "10:10", "10:19", "10:28", "10:37", "10:46", "10:55", "11:04", "11:13", "11:22", "11:31", "11:40", "11:49", "11:58", "12:07", "12:16", "12:25", "12:34", "12:43", "12:52", "13:01", "13:10", "13:19", "13:28", "13:37", "13:46", "13:55", "14:04", "14:13", "14:22", "14:31", "14:40", "14:49", "14:58", "15:07", "15:16", "15:25", "15:34", "15:43", "15:52", "16:01", "16:10", "16:19", "16:28", "16:37", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:46", "17:51", "17:55", "18:00", "18:05", "18:10", "18:15", "18:21", "18:26", "18:32", "18:38", "18:44", "18:50", "18:56", "19:02", "19:08", "19:14", "19:20", "19:26", "19:32", "19:38", "19:44", "19:50", "19:56", "20:02", "20:09", "20:18", "20:27", "20:36", "20:45", "20:54", "21:03", "21:12", "21:21", "21:30", "21:39", "21:48", "21:57", "22:06", "22:15", "22:24", "22:33", "22:42", "22:51", "23:00", "23:09", "23:18", "23:27", "23:36", "23:45", "23:54", "00:03", "00:12", "00:23", "00:38"],'G8':["06:03", "06:14", "06:21", "06:29", "06:37", "06:46", "06:54", "07:00", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:19", "09:25", "09:31", "09:37", "09:43", "09:50", "09:59", "10:08", "10:17", "10:26", "10:35", "10:44", "10:53", "11:02", "11:11", "11:20", "11:29", "11:38", "11:47", "11:56", "12:05", "12:14", "12:23", "12:32", "12:41", "12:50", "12:59", "13:08", "13:17", "13:26", "13:35", "13:44", "13:53", "14:02", "14:11", "14:20", "14:29", "14:38", "14:47", "14:56", "15:05", "15:14", "15:23", "15:32", "15:41", "15:50", "15:59", "16:08", "16:17", "16:26", "16:35", "16:43", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:44", "17:49", "17:53", "17:58", "18:03", "18:08", "18:13", "18:19", "18:24", "18:30", "18:36", "18:42", "18:48", "18:54", "19:00", "19:06", "19:12", "19:18", "19:24", "19:30", "19:36", "19:42", "19:48", "19:54", "20:00", "20:07", "20:16", "20:25", "20:34", "20:43", "20:52", "21:01", "21:10", "21:19", "21:28", "21:37", "21:46", "21:55", "22:04", "22:13", "22:22", "22:31", "22:40", "22:49", "22:58", "23:07", "23:16", "23:25", "23:34", "23:43", "23:52", "00:01", "00:10", "00:21", "00:36"],'G8a':["06:01", "06:12", "06:20", "06:28", "06:36", "06:45", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:23", "09:29", "09:35", "09:41", "09:49", "09:58", "10:07", "10:16", "10:25", "10:34", "10:43", "10:52", "11:01", "11:10", "11:19", "11:28", "11:37", "11:46", "11:55", "12:04", "12:13", "12:22", "12:31", "12:40", "12:49", "12:58", "13:07", "13:16", "13:25", "13:34", "13:43", "13:52", "14:01", "14:10", "14:19", "14:28", "14:37", "14:46", "14:55", "15:04", "15:13", "15:22", "15:31", "15:40", "15:49", "15:58", "16:06", "16:15", "16:24", "16:33", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:42", "17:47", "17:52", "17:56", "18:01", "18:06", "18:11", "18:17", "18:23", "18:29", "18:35", "18:41", "18:47", "18:53", "18:59", "19:05", "19:11", "19:17", "19:23", "19:29", "19:35", "19:41", "19:47", "19:53", "19:59", "20:06", "20:15", "20:24", "20:33", "20:42", "20:51", "21:00", "21:09", "21:18", "21:27", "21:36", "21:45", "21:54", "22:03", "22:12", "22:21", "22:30", "22:39", "22:48", "22:57", "23:06", "23:15", "23:24", "23:33", "23:42", "23:51", "00:00", "00:09", "00:19", "00:34"],'G9':["06:00", "06:10", "06:18", "06:26", "06:34", "06:43", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:27", "09:33", "09:39", "09:47", "09:56", "10:05", "10:14", "10:23", "10:32", "10:41", "10:50", "10:59", "11:08", "11:17", "11:26", "11:35", "11:44", "11:53", "12:02", "12:11", "12:20", "12:29", "12:38", "12:47", "12:56", "13:05", "13:14", "13:23", "13:32", "13:41", "13:50", "13:59", "14:08", "14:17", "14:26", "14:35", "14:44", "14:53", "15:02", "15:11", "15:20", "15:29", "15:38", "15:47", "15:56", "16:05", "16:14", "16:23", "16:32", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:34", "17:40", "17:45", "17:50", "17:55", "17:59", "18:04", "18:09", "18:15", "18:21", "18:27", "18:33", "18:39", "18:45", "18:51", "18:57", "19:03", "19:09", "19:15", "19:21", "19:27", "19:33", "19:39", "19:45", "19:51", "19:57", "20:04", "20:13", "20:22", "20:31", "20:40", "20:49", "20:58", "21:07", "21:16", "21:25", "21:34", "21:43", "21:52", "22:01", "22:10", "22:19", "22:28", "22:37", "22:46", "22:55", "23:04", "23:13", "23:22", "23:31", "23:40", "23:49", "23:58", "00:07", "00:18", "00:33"],'G10':["06:08", "06:15", "06:23", "06:31", "06:40", "06:48", "06:54", "07:01", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:19", "09:25", "09:31", "09:37", "09:44", "09:53", "10:02", "10:11", "10:20", "10:29", "10:38", "10:47", "10:56", "11:05", "11:14", "11:23", "11:32", "11:41", "11:50", "11:59", "12:08", "12:17", "12:26", "12:35", "12:44", "12:53", "13:02", "13:11", "13:20", "13:29", "13:38", "13:47", "13:56", "14:05", "14:14", "14:23", "14:32", "14:41", "14:50", "14:59", "15:08", "15:17", "15:26", "15:35", "15:44", "15:53", "16:02", "16:11", "16:20", "16:29", "16:38", "16:44", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:32", "17:38", "17:43", "17:47", "17:52", "17:57", "18:02", "18:07", "18:13", "18:18", "18:24", "18:30", "18:36", "18:42", "18:48", "18:54", "19:00", "19:06", "19:12", "19:18", "19:24", "19:30", "19:36", "19:42", "19:48", "19:54", "20:01", "20:10", "20:19", "20:28", "20:37", "20:46", "20:55", "21:04", "21:13", "21:22", "21:31", "21:40", "21:49", "21:58", "22:07", "22:16", "22:25", "22:34", "22:43", "22:52", "23:01", "23:10", "23:19", "23:28", "23:37", "23:46", "23:55", "00:04", "00:15", "00:30"],'G10a':["06:06", "06:14", "06:22", "06:30", "06:39", "06:47", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:23", "09:29", "09:35", "09:43", "09:52", "10:01", "10:10", "10:19", "10:28", "10:37", "10:46", "10:55", "11:04", "11:13", "11:22", "11:31", "11:40", "11:49", "11:58", "12:07", "12:16", "12:25", "12:34", "12:43", "12:52", "13:01", "13:10", "13:19", "13:28", "13:37", "13:46", "13:55", "14:04", "14:13", "14:22", "14:31", "14:40", "14:49", "14:58", "15:07", "15:16", "15:25", "15:34", "15:43", "15:52", "16:00", "16:09", "16:18", "16:27", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:36", "17:41", "17:46", "17:50", "17:55", "18:00", "18:05", "18:11", "18:17", "18:23", "18:29", "18:35", "18:41", "18:47", "18:53", "18:59", "19:05", "19:11", "19:17", "19:23", "19:29", "19:35", "19:41", "19:47", "19:53", "20:00", "20:09", "20:18", "20:27", "20:36", "20:45", "20:54", "21:03", "21:12", "21:21", "21:30", "21:39", "21:48", "21:57", "22:06", "22:15", "22:24", "22:33", "22:42", "22:51", "23:00", "23:09", "23:18", "23:27", "23:36", "23:45", "23:54", "00:03", "00:14", "00:29"],'G11':["06:04", "06:12", "06:20", "06:28", "06:37", "06:45", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:27", "09:33", "09:41", "09:50", "09:59", "10:08", "10:17", "10:26", "10:35", "10:44", "10:53", "11:02", "11:11", "11:20", "11:29", "11:38", "11:47", "11:56", "12:05", "12:14", "12:23", "12:32", "12:41", "12:50", "12:59", "13:08", "13:17", "13:26", "13:35", "13:44", "13:53", "14:02", "14:11", "14:20", "14:29", "14:38", "14:47", "14:56", "15:05", "15:14", "15:23", "15:32", "15:41", "15:50", "15:59", "16:08", "16:17", "16:26", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:29", "17:35", "17:39", "17:44", "17:49", "17:54", "17:58", "18:04", "18:10", "18:15", "18:21", "18:27", "18:33", "18:39", "18:45", "18:51", "18:57", "19:03", "19:09", "19:15", "19:21", "19:27", "19:33", "19:39", "19:45", "19:51", "19:58", "20:07", "20:16", "20:25", "20:34", "20:43", "20:52", "21:01", "21:10", "21:19", "21:28", "21:37", "21:46", "21:55", "22:04", "22:13", "22:22", "22:31", "22:40", "22:49", "22:58", "23:07", "23:16", "23:25", "23:34", "23:43", "23:52", "00:01", "00:12", "00:27"],'G12':["06:03", "06:10", "06:18", "06:26", "06:35", "06:43", "06:49", "06:56", "07:02", "07:08", "07:14", "07:20", "07:26", "07:32", "07:38", "07:44", "07:50", "07:56", "08:02", "08:08", "08:14", "08:20", "08:26", "08:32", "08:38", "08:44", "08:50", "08:56", "09:02", "09:08", "09:14", "09:20", "09:26", "09:32", "09:39", "09:48", "09:57", "10:06", "10:15", "10:24", "10:33", "10:42", "10:51", "11:00", "11:09", "11:18", "11:27", "11:36", "11:45", "11:54", "12:03", "12:12", "12:21", "12:30", "12:39", "12:48", "12:57", "13:06", "13:15", "13:24", "13:33", "13:42", "13:51", "14:00", "14:09", "14:18", "14:27", "14:36", "14:45", "14:54", "15:03", "15:12", "15:21", "15:30", "15:39", "15:48", "15:57", "16:06", "16:15", "16:24", "16:32", "16:39", "16:45", "16:51", "16:57", "17:03", "17:09", "17:15", "17:21", "17:27", "17:33", "17:37", "17:42", "17:47", "17:52", "17:56", "18:02", "18:08", "18:13", "18:19", "18:25", "18:31", "18:37", "18:43", "18:49", "18:55", "19:01", "19:07", "19:13", "19:19", "19:25", "19:31", "19:37", "19:43", "19:49", "19:56", "20:05", "20:14", "20:23", "20:32", "20:41", "20:50", "20:59", "21:08", "21:17", "21:26", "21:35", "21:44", "21:53", "22:02", "22:11", "22:20", "22:29", "22:38", "22:47", "22:56", "23:05", "23:14", "23:23", "23:32", "23:41", "23:50", "23:59", "00:10", "00:25"],'G13':["06:00", "06:07", "06:15", "06:23", "06:32", "06:40", "06:46", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:23", "09:29", "09:36", "09:45", "09:54", "10:03", "10:12", "10:21", "10:30", "10:39", "10:48", "10:57", "11:06", "11:15", "11:24", "11:33", "11:42", "11:51", "12:00", "12:09", "12:18", "12:27", "12:36", "12:45", "12:54", "13:03", "13:12", "13:21", "13:30", "13:39", "13:48", "13:57", "14:06", "14:15", "14:24", "14:33", "14:42", "14:51", "15:00", "15:09", "15:18", "15:27", "15:36", "15:45", "15:54", "16:03", "16:12", "16:21", "16:29", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:30", "17:34", "17:39", "17:44", "17:49", "17:53", "17:59", "18:05", "18:10", "18:16", "18:22", "18:28", "18:34", "18:40", "18:46", "18:52", "18:58", "19:04", "19:10", "19:16", "19:22", "19:28", "19:34", "19:40", "19:46", "19:53", "20:02", "20:11", "20:20", "20:29", "20:38", "20:47", "20:56", "21:05", "21:14", "21:23", "21:32", "21:41", "21:50", "21:59", "22:08", "22:17", "22:26", "22:35", "22:44", "22:53", "23:02", "23:11", "23:20", "23:29", "23:38", "23:47", "23:56", "00:07", "00:22"],'G14':["06:05", "06:13", "06:21", "06:30", "06:38", "06:44", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:27", "09:34", "09:43", "09:52", "10:01", "10:10", "10:19", "10:28", "10:37", "10:46", "10:55", "11:04", "11:13", "11:22", "11:31", "11:40", "11:49", "11:58", "12:07", "12:16", "12:25", "12:34", "12:43", "12:52", "13:01", "13:10", "13:19", "13:28", "13:37", "13:46", "13:55", "14:04", "14:13", "14:22", "14:31", "14:40", "14:49", "14:58", "15:07", "15:16", "15:25", "15:34", "15:43", "15:52", "16:01", "16:10", "16:19", "16:27", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:28", "17:32", "17:37", "17:42", "17:47", "17:51", "17:57", "18:03", "18:08", "18:14", "18:20", "18:26", "18:32", "18:38", "18:44", "18:50", "18:56", "19:02", "19:08", "19:14", "19:20", "19:26", "19:32", "19:38", "19:44", "19:51", "20:00", "20:09", "20:18", "20:27", "20:36", "20:45", "20:54", "21:03", "21:12", "21:21", "21:30", "21:39", "21:48", "21:57", "22:06", "22:15", "22:24", "22:33", "22:42", "22:51", "23:00", "23:09", "23:18", "23:27", "23:36", "23:45", "23:54", "00:05", "00:20"],'G15':["06:04", "06:12", "06:20", "06:29", "06:37", "06:43", "06:49", "06:55", "07:01", "07:07", "07:13", "07:19", "07:25", "07:31", "07:37", "07:43", "07:49", "07:55", "08:01", "08:07", "08:13", "08:19", "08:25", "08:31", "08:37", "08:43", "08:49", "08:55", "09:01", "09:07", "09:13", "09:19", "09:25", "09:33", "09:42", "09:51", "10:00", "10:09", "10:18", "10:27", "10:36", "10:45", "10:54", "11:03", "11:12", "11:21", "11:30", "11:39", "11:48", "11:57", "12:06", "12:15", "12:24", "12:33", "12:42", "12:51", "13:00", "13:09", "13:18", "13:27", "13:36", "13:45", "13:54", "14:03", "14:12", "14:21", "14:30", "14:39", "14:48", "14:57", "15:06", "15:15", "15:24", "15:33", "15:42", "15:50", "15:59", "16:08", "16:17", "16:26", "16:32", "16:38", "16:44", "16:50", "16:56", "17:02", "17:08", "17:14", "17:20", "17:26", "17:31", "17:35", "17:40", "17:45", "17:50", "17:55", "18:01", "18:07", "18:13", "18:19", "18:25", "18:31", "18:37", "18:43", "18:49", "18:55", "19:01", "19:07", "19:13", "19:19", "19:25", "19:31", "19:37", "19:43", "19:50", "19:59", "20:08", "20:17", "20:26", "20:35", "20:44", "20:53", "21:02", "21:11", "21:20", "21:29", "21:38", "21:47", "21:56", "22:05", "22:14", "22:23", "22:32", "22:41", "22:50", "22:59", "23:08", "23:17", "23:26", "23:35", "23:44", "23:53", "00:04", "00:19"],'G16':["06:02", "06:10", "06:18", "06:27", "06:35", "06:41", "06:47", "06:53", "06:59", "07:05", "07:11", "07:17", "07:23", "07:29", "07:35", "07:41", "07:47", "07:53", "07:59", "08:05", "08:11", "08:17", "08:23", "08:29", "08:35", "08:41", "08:47", "08:53", "08:59", "09:05", "09:11", "09:17", "09:23", "09:31", "09:40", "09:49", "09:58", "10:07", "10:16", "10:25", "10:34", "10:43", "10:52", "11:01", "11:10", "11:19", "11:28", "11:37", "11:46", "11:55", "12:04", "12:13", "12:22", "12:31", "12:40", "12:49", "12:58", "13:07", "13:16", "13:25", "13:34", "13:43", "13:52", "14:01", "14:10", "14:19", "14:28", "14:37", "14:46", "14:55", "15:04", "15:13", "15:22", "15:31", "15:40", "15:48", "15:57", "16:06", "16:15", "16:24", "16:30", "16:36", "16:42", "16:48", "16:54", "17:00", "17:06", "17:12", "17:18", "17:24", "17:28", "17:33", "17:38", "17:43", "17:47", "17:53", "17:59", "18:05", "18:11", "18:17", "18:23", "18:29", "18:35", "18:41", "18:47", "18:53", "18:59", "19:05", "19:11", "19:17", "19:23", "19:29", "19:35", "19:41", "19:48", "19:57", "20:06", "20:15", "20:24", "20:33", "20:42", "20:51", "21:00", "21:09", "21:18", "21:27", "21:36", "21:45", "21:54", "22:03", "22:12", "22:21", "22:30", "22:39", "22:48", "22:57", "23:06", "23:15", "23:24", "23:33", "23:42", "23:51", "00:02", "00:17"],'G17':["06:00", "06:08", "06:16", "06:25", "06:33", "06:39", "06:45", "06:51", "06:57", "07:03", "07:09", "07:15", "07:21", "07:27", "07:33", "07:39", "07:45", "07:51", "07:57", "08:03", "08:09", "08:15", "08:21", "08:27", "08:33", "08:39", "08:45", "08:51", "08:57", "09:03", "09:09", "09:15", "09:21", "09:29", "09:38", "09:47", "09:56", "10:05", "10:14", "10:23", "10:32", "10:41", "10:50", "10:59", "11:08", "11:17", "11:26", "11:35", "11:44", "11:53", "12:02", "12:11", "12:20", "12:29", "12:38", "12:47", "12:56", "13:05", "13:14", "13:23", "13:32", "13:41", "13:50", "13:59", "14:08", "14:17", "14:26", "14:35", "14:44", "14:53", "15:02", "15:11", "15:20", "15:29", "15:38", "15:46", "15:55", "16:04", "16:13", "16:22", "16:28", "16:34", "16:40", "16:46", "16:52", "16:58", "17:04", "17:10", "17:16", "17:22", "17:26", "17:31", "17:36", "17:41", "17:45", "17:51", "17:57", "18:03", "18:09", "18:15", "18:21", "18:27", "18:33", "18:39", "18:45", "18:51", "18:57", "19:03", "19:09", "19:15", "19:21", "19:27", "19:33", "19:39", "19:46", "19:55", "20:04", "20:13", "20:22", "20:31", "20:40", "20:49", "20:58", "21:07", "21:16", "21:25", "21:34", "21:43", "21:52", "22:01", "22:10", "22:19", "22:28", "22:37", "22:46", "22:55", "23:04", "23:13", "23:22", "23:31", "23:40", "23:49", "00:00", "00:15"]};
+const TH1D={'G0':["06:00", "06:10", "06:18", "06:28", "06:38", "06:48", "06:58", "07:08", "07:18", "07:28", "07:38", "07:48", "07:58", "08:08", "08:18", "08:28", "08:38", "08:48", "08:58", "09:08", "09:16", "09:24", "09:31", "09:39", "09:46", "09:54", "10:01", "10:09", "10:16", "10:24", "10:31", "10:39", "10:46", "10:54", "11:01", "11:09", "11:16", "11:24", "11:31", "11:38", "11:45", "11:52", "11:59", "12:06", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:53", "17:01", "17:09", "17:17", "17:25", "17:33", "17:41", "17:49", "17:57", "18:05", "18:13", "18:21", "18:29", "18:37", "18:45", "18:53", "19:01", "19:09", "19:17", "19:25", "19:33", "19:41", "19:49", "19:57", "20:05", "20:13", "20:20", "20:30", "20:40", "20:50", "21:00", "21:10", "21:20", "21:30", "21:40", "21:50", "22:00", "22:10", "22:20", "22:30", "22:40", "22:50", "23:00", "23:20", "23:40", "00:00"],'G3':["06:02", "06:12", "06:20", "06:30", "06:40", "06:50", "07:00", "07:10", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:18", "09:26", "09:33", "09:41", "09:48", "09:56", "10:03", "10:11", "10:18", "10:26", "10:33", "10:41", "10:48", "10:56", "11:03", "11:11", "11:18", "11:26", "11:33", "11:40", "11:47", "11:54", "12:01", "12:08", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:39", "16:47", "16:55", "17:03", "17:11", "17:19", "17:27", "17:35", "17:43", "17:51", "17:59", "18:07", "18:15", "18:23", "18:31", "18:39", "18:47", "18:55", "19:03", "19:11", "19:19", "19:27", "19:35", "19:43", "19:51", "19:59", "20:07", "20:15", "20:22", "20:32", "20:42", "20:52", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:22", "23:42", "00:02"],'G4':["06:04", "06:14", "06:22", "06:32", "06:42", "06:52", "07:02", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:20", "09:28", "09:35", "09:43", "09:50", "09:58", "10:05", "10:13", "10:20", "10:28", "10:35", "10:43", "10:50", "10:58", "11:05", "11:13", "11:20", "11:28", "11:35", "11:42", "11:49", "11:56", "12:03", "12:10", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:45", "19:53", "20:01", "20:09", "20:17", "20:24", "20:34", "20:44", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:24", "23:44", "00:04"],'G5':["06:00", "06:07", "06:17", "06:25", "06:35", "06:45", "06:55", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:15", "09:23", "09:31", "09:38", "09:46", "09:53", "10:01", "10:08", "10:16", "10:23", "10:31", "10:38", "10:46", "10:53", "11:01", "11:08", "11:16", "11:23", "11:31", "11:38", "11:45", "11:52", "11:59", "12:06", "12:13", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "17:00", "17:08", "17:16", "17:24", "17:32", "17:40", "17:48", "17:56", "18:04", "18:12", "18:20", "18:28", "18:36", "18:44", "18:52", "19:00", "19:08", "19:16", "19:24", "19:32", "19:40", "19:48", "19:56", "20:04", "20:12", "20:20", "20:27", "20:37", "20:47", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:27", "23:47", "00:07"],'G6':["06:01", "06:09", "06:19", "06:27", "06:37", "06:47", "06:57", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:25", "09:33", "09:40", "09:48", "09:55", "10:03", "10:10", "10:18", "10:25", "10:33", "10:40", "10:48", "10:55", "11:03", "11:10", "11:18", "11:25", "11:33", "11:40", "11:47", "11:54", "12:01", "12:08", "12:15", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:14", "16:22", "16:30", "16:38", "16:46", "16:54", "17:02", "17:10", "17:18", "17:26", "17:34", "17:42", "17:50", "17:58", "18:06", "18:14", "18:22", "18:30", "18:38", "18:46", "18:54", "19:02", "19:10", "19:18", "19:26", "19:34", "19:42", "19:50", "19:58", "20:06", "20:14", "20:22", "20:29", "20:39", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:29", "23:49", "00:09"],'G7':["06:04", "06:11", "06:21", "06:29", "06:39", "06:49", "06:59", "07:09", "07:19", "07:29", "07:39", "07:49", "07:59", "08:09", "08:19", "08:29", "08:39", "08:49", "08:59", "09:09", "09:19", "09:28", "09:35", "09:43", "09:50", "09:58", "10:05", "10:13", "10:20", "10:28", "10:35", "10:43", "10:50", "10:58", "11:05", "11:13", "11:20", "11:28", "11:35", "11:42", "11:50", "11:57", "12:04", "12:11", "12:17", "12:25", "12:32", "12:40", "12:48", "12:56", "13:04", "13:12", "13:20", "13:28", "13:36", "13:44", "13:52", "14:00", "14:08", "14:16", "14:24", "14:32", "14:40", "14:48", "14:56", "15:04", "15:12", "15:20", "15:28", "15:36", "15:44", "15:52", "16:00", "16:08", "16:16", "16:24", "16:32", "16:40", "16:48", "16:56", "17:04", "17:12", "17:20", "17:28", "17:36", "17:44", "17:52", "18:00", "18:08", "18:16", "18:24", "18:32", "18:40", "18:48", "18:56", "19:04", "19:12", "19:20", "19:28", "19:36", "19:44", "19:52", "20:00", "20:08", "20:16", "20:24", "20:31", "20:41", "20:51", "21:01", "21:11", "21:21", "21:31", "21:41", "21:51", "22:01", "22:11", "22:21", "22:31", "22:41", "22:51", "23:01", "23:11", "23:31", "23:51", "00:11"],'G8':["06:06", "06:13", "06:23", "06:31", "06:41", "06:51", "07:01", "07:11", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:21", "09:30", "09:37", "09:45", "09:52", "10:00", "10:07", "10:15", "10:22", "10:30", "10:37", "10:45", "10:52", "11:00", "11:07", "11:15", "11:22", "11:30", "11:37", "11:44", "11:52", "11:59", "12:06", "12:13", "12:19", "12:27", "12:34", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:34", "16:42", "16:50", "16:58", "17:06", "17:14", "17:22", "17:30", "17:38", "17:46", "17:54", "18:02", "18:10", "18:18", "18:26", "18:34", "18:42", "18:50", "18:58", "19:06", "19:14", "19:22", "19:30", "19:38", "19:46", "19:54", "20:02", "20:10", "20:18", "20:26", "20:33", "20:43", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:33", "23:53", "00:13"],'G8a':["06:07", "06:15", "06:25", "06:33", "06:43", "06:53", "07:03", "07:13", "07:23", "07:33", "07:43", "07:53", "08:03", "08:13", "08:23", "08:33", "08:43", "08:53", "09:03", "09:13", "09:23", "09:31", "09:39", "09:46", "09:54", "10:01", "10:09", "10:16", "10:24", "10:31", "10:39", "10:46", "10:54", "11:01", "11:09", "11:16", "11:24", "11:31", "11:39", "11:46", "11:53", "12:00", "12:07", "12:14", "12:21", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "17:00", "17:08", "17:16", "17:24", "17:32", "17:40", "17:48", "17:56", "18:04", "18:12", "18:20", "18:28", "18:36", "18:44", "18:52", "19:00", "19:08", "19:16", "19:24", "19:32", "19:40", "19:48", "19:56", "20:04", "20:12", "20:20", "20:28", "20:35", "20:45", "20:55", "21:05", "21:15", "21:25", "21:35", "21:45", "21:55", "22:05", "22:15", "22:25", "22:35", "22:45", "22:55", "23:05", "23:15", "23:35", "23:55", "00:15"],'G9':["06:00", "06:09", "06:17", "06:27", "06:35", "06:45", "06:55", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:15", "09:25", "09:33", "09:41", "09:48", "09:56", "10:03", "10:11", "10:18", "10:26", "10:33", "10:41", "10:48", "10:56", "11:03", "11:11", "11:18", "11:26", "11:33", "11:41", "11:48", "11:55", "12:02", "12:09", "12:16", "12:23", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:14", "16:22", "16:30", "16:38", "16:46", "16:54", "17:02", "17:10", "17:18", "17:26", "17:34", "17:42", "17:50", "17:58", "18:06", "18:14", "18:22", "18:30", "18:38", "18:46", "18:54", "19:02", "19:10", "19:18", "19:26", "19:34", "19:42", "19:50", "19:58", "20:06", "20:14", "20:22", "20:30", "20:37", "20:47", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:17", "23:37", "23:57", "00:17"],'G10':["06:02", "06:12", "06:19", "06:29", "06:37", "06:47", "06:57", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:27", "09:36", "09:43", "09:51", "09:58", "10:06", "10:13", "10:21", "10:28", "10:36", "10:43", "10:51", "10:58", "11:06", "11:13", "11:21", "11:28", "11:36", "11:43", "11:50", "11:58", "12:05", "12:12", "12:19", "12:25", "12:33", "12:40", "12:48", "12:56", "13:04", "13:12", "13:20", "13:28", "13:36", "13:44", "13:52", "14:00", "14:08", "14:16", "14:24", "14:32", "14:40", "14:48", "14:56", "15:04", "15:12", "15:20", "15:28", "15:36", "15:44", "15:52", "16:00", "16:08", "16:16", "16:24", "16:32", "16:40", "16:48", "16:56", "17:04", "17:12", "17:20", "17:28", "17:36", "17:44", "17:52", "18:00", "18:08", "18:16", "18:24", "18:32", "18:40", "18:48", "18:56", "19:04", "19:12", "19:20", "19:28", "19:36", "19:44", "19:52", "20:00", "20:08", "20:16", "20:24", "20:32", "20:39", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:39", "23:59", "00:19"],'G10a':["06:04", "06:14", "06:21", "06:31", "06:39", "06:49", "06:59", "07:09", "07:19", "07:29", "07:39", "07:49", "07:59", "08:09", "08:19", "08:29", "08:39", "08:49", "08:59", "09:09", "09:19", "09:29", "09:38", "09:45", "09:53", "10:00", "10:08", "10:15", "10:23", "10:30", "10:38", "10:45", "10:53", "11:00", "11:08", "11:15", "11:23", "11:30", "11:38", "11:45", "11:52", "12:00", "12:07", "12:14", "12:21", "12:27", "12:35", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:34", "16:42", "16:50", "16:58", "17:06", "17:14", "17:22", "17:30", "17:38", "17:46", "17:54", "18:02", "18:10", "18:18", "18:26", "18:34", "18:42", "18:50", "18:58", "19:06", "19:14", "19:22", "19:30", "19:38", "19:46", "19:54", "20:02", "20:10", "20:18", "20:26", "20:34", "20:41", "20:51", "21:01", "21:11", "21:21", "21:31", "21:41", "21:51", "22:01", "22:11", "22:21", "22:31", "22:41", "22:51", "23:01", "23:11", "23:21", "23:41", "00:01", "00:21"],'G11':["06:05", "06:15", "06:23", "06:33", "06:41", "06:51", "07:01", "07:11", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:21", "09:31", "09:39", "09:47", "09:54", "10:02", "10:09", "10:17", "10:24", "10:32", "10:39", "10:47", "10:54", "11:02", "11:09", "11:17", "11:24", "11:32", "11:39", "11:47", "11:54", "12:01", "12:08", "12:15", "12:22", "12:29", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "17:00", "17:08", "17:16", "17:24", "17:32", "17:40", "17:48", "17:56", "18:04", "18:12", "18:20", "18:28", "18:36", "18:44", "18:52", "19:00", "19:08", "19:16", "19:24", "19:32", "19:40", "19:48", "19:56", "20:04", "20:12", "20:20", "20:28", "20:36", "20:43", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:23", "23:43", "00:03", "00:22"],'G12':["06:07", "06:17", "06:24", "06:34", "06:42", "06:52", "07:02", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:41", "09:48", "09:56", "10:03", "10:11", "10:18", "10:26", "10:33", "10:41", "10:48", "10:56", "11:03", "11:11", "11:18", "11:26", "11:33", "11:41", "11:48", "11:55", "12:03", "12:10", "12:17", "12:24", "12:30", "12:38", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:53", "17:01", "17:09", "17:17", "17:25", "17:33", "17:41", "17:49", "17:57", "18:05", "18:13", "18:21", "18:29", "18:37", "18:45", "18:53", "19:01", "19:09", "19:17", "19:25", "19:33", "19:41", "19:49", "19:57", "20:05", "20:13", "20:21", "20:29", "20:37", "20:44", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:25", "23:44", "00:04", "00:24"],'G13':["06:00", "06:10", "06:20", "06:28", "06:38", "06:46", "06:56", "07:06", "07:16", "07:26", "07:36", "07:46", "07:56", "08:06", "08:16", "08:26", "08:36", "08:46", "08:56", "09:06", "09:16", "09:26", "09:36", "09:44", "09:52", "09:59", "10:07", "10:14", "10:22", "10:29", "10:37", "10:44", "10:52", "10:59", "11:07", "11:14", "11:22", "11:29", "11:37", "11:44", "11:52", "11:59", "12:06", "12:13", "12:20", "12:27", "12:34", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:45", "19:53", "20:01", "20:09", "20:17", "20:25", "20:33", "20:41", "20:48", "20:58", "21:08", "21:18", "21:28", "21:38", "21:48", "21:58", "22:08", "22:18", "22:28", "22:38", "22:48", "22:58", "23:08", "23:18", "23:28", "23:48", "00:08", "00:27"],'G14':["06:01", "06:12", "06:22", "06:29", "06:39", "06:47", "06:57", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:27", "09:37", "09:46", "09:53", "10:01", "10:08", "10:16", "10:23", "10:31", "10:38", "10:46", "10:53", "11:01", "11:08", "11:16", "11:23", "11:31", "11:38", "11:46", "11:53", "12:00", "12:08", "12:15", "12:22", "12:29", "12:35", "12:43", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:34", "16:42", "16:50", "16:58", "17:06", "17:14", "17:22", "17:30", "17:38", "17:46", "17:54", "18:02", "18:10", "18:18", "18:26", "18:34", "18:42", "18:50", "18:58", "19:06", "19:14", "19:22", "19:30", "19:38", "19:46", "19:54", "20:02", "20:10", "20:18", "20:26", "20:34", "20:42", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:30", "23:49", "00:09", "00:29"],'G15':["06:03", "06:14", "06:24", "06:31", "06:41", "06:49", "06:59", "07:09", "07:19", "07:29", "07:39", "07:49", "07:59", "08:09", "08:19", "08:29", "08:39", "08:49", "08:59", "09:09", "09:19", "09:29", "09:39", "09:47", "09:55", "10:02", "10:10", "10:17", "10:25", "10:32", "10:40", "10:47", "10:55", "11:02", "11:10", "11:17", "11:25", "11:32", "11:40", "11:47", "11:55", "12:02", "12:09", "12:16", "12:23", "12:30", "12:37", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "17:00", "17:08", "17:16", "17:24", "17:32", "17:40", "17:48", "17:56", "18:04", "18:12", "18:20", "18:28", "18:36", "18:44", "18:52", "19:00", "19:08", "19:16", "19:24", "19:32", "19:40", "19:48", "19:56", "20:04", "20:12", "20:20", "20:28", "20:36", "20:44", "20:51", "21:01", "21:11", "21:21", "21:31", "21:41", "21:51", "22:01", "22:11", "22:21", "22:31", "22:41", "22:51", "23:01", "23:11", "23:21", "23:31", "23:51", "00:11", "00:30"],'G16':["06:05", "06:16", "06:25", "06:33", "06:43", "06:51", "07:01", "07:11", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:21", "09:31", "09:41", "09:49", "09:57", "10:04", "10:12", "10:19", "10:27", "10:34", "10:42", "10:49", "10:57", "11:04", "11:12", "11:19", "11:27", "11:34", "11:42", "11:49", "11:57", "12:04", "12:11", "12:18", "12:25", "12:32", "12:39", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:14", "16:22", "16:30", "16:38", "16:46", "16:54", "17:02", "17:10", "17:18", "17:26", "17:34", "17:42", "17:50", "17:58", "18:06", "18:14", "18:22", "18:30", "18:38", "18:46", "18:54", "19:02", "19:10", "19:18", "19:26", "19:34", "19:42", "19:50", "19:58", "20:06", "20:14", "20:22", "20:30", "20:38", "20:46", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:23", "23:33", "23:53", "00:13", "00:32"],'G17':["06:12", "06:22", "06:32", "06:37", "06:46", "06:54", "07:04", "07:14", "07:24", "07:34", "07:44", "07:54", "08:04", "08:14", "08:24", "08:34", "08:44", "08:54", "09:04", "09:14", "09:24", "09:38", "09:45", "09:53", "10:00", "10:08", "10:15", "10:23", "10:30", "10:38", "10:45", "10:53", "11:00", "11:08", "11:15", "11:23", "11:30", "11:38", "11:45", "11:53", "12:00", "12:08", "12:16", "12:24", "12:29", "12:36", "12:42", "12:50", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:45", "19:53", "20:01", "20:09", "20:17", "20:25", "20:33", "20:41", "20:49", "20:56", "21:06", "21:16", "21:26", "21:36", "21:46", "21:56", "22:06", "22:16", "22:26", "22:36", "22:46", "22:56", "23:06", "23:16", "23:27", "23:38", "23:56", "00:17", "00:37"]};
+const TH1U={'G0':["06:07", "06:21", "06:31", "06:36", "06:45", "06:55", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:19", "09:27", "09:36", "09:49", "09:57", "10:06", "10:13", "10:21", "10:28", "10:36", "10:43", "10:51", "10:58", "11:06", "11:13", "11:21", "11:28", "11:35", "11:43", "11:50", "11:56", "12:03", "12:11", "12:18", "12:26", "12:34", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:34", "16:42", "16:50", "16:58", "17:06", "17:14", "17:22", "17:30", "17:38", "17:46", "17:54", "18:02", "18:10", "18:18", "18:26", "18:34", "18:42", "18:50", "18:58", "19:06", "19:14", "19:22", "19:30", "19:38", "19:46", "19:54", "20:02", "20:10", "20:17", "20:27", "20:35", "20:43", "20:54", "20:59", "21:07", "21:15", "21:25", "21:31", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:08", "23:17", "23:28", "23:37", "23:48", "23:57", "00:11", "00:21", "00:36", "00:51"],'G3':["06:04", "06:14", "06:25", "06:32", "06:42", "06:51", "07:01", "07:11", "07:21", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:42", "09:52", "10:02", "10:09", "10:17", "10:24", "10:32", "10:39", "10:47", "10:54", "11:02", "11:09", "11:17", "11:24", "11:32", "11:39", "11:47", "11:53", "12:00", "12:08", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:39", "16:47", "16:55", "17:03", "17:11", "17:19", "17:27", "17:35", "17:43", "17:51", "17:59", "18:07", "18:15", "18:23", "18:31", "18:39", "18:47", "18:55", "19:03", "19:11", "19:19", "19:27", "19:35", "19:43", "19:51", "19:59", "20:07", "20:14", "20:23", "20:31", "20:39", "20:47", "20:55", "21:03", "21:11", "21:19", "21:27", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:24", "23:34", "23:44", "23:54", "00:07", "00:17", "00:32", "00:47"],'G4':["06:02", "06:12", "06:23", "06:30", "06:40", "06:49", "06:59", "07:09", "07:19", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:40", "09:50", "10:00", "10:07", "10:15", "10:22", "10:30", "10:37", "10:45", "10:52", "11:00", "11:07", "11:15", "11:22", "11:30", "11:37", "11:45", "11:51", "11:58", "12:06", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:53", "17:01", "17:09", "17:17", "17:25", "17:33", "17:41", "17:49", "17:57", "18:05", "18:13", "18:21", "18:29", "18:37", "18:45", "18:53", "19:01", "19:09", "19:17", "19:25", "19:33", "19:41", "19:49", "19:57", "20:05", "20:12", "20:21", "20:29", "20:37", "20:45", "20:53", "21:01", "21:09", "21:17", "21:25", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:32", "23:42", "23:52", "00:05", "00:15", "00:30", "00:45"],'G5':["06:00", "06:09", "06:20", "06:27", "06:37", "06:46", "06:56", "07:06", "07:16", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:27", "09:37", "09:47", "09:57", "10:04", "10:12", "10:19", "10:27", "10:34", "10:42", "10:49", "10:57", "11:04", "11:12", "11:19", "11:27", "11:34", "11:42", "11:48", "11:55", "12:03", "12:10", "12:18", "12:26", "12:34", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:34", "16:42", "16:50", "16:58", "17:06", "17:14", "17:22", "17:30", "17:38", "17:46", "17:54", "18:02", "18:10", "18:18", "18:26", "18:34", "18:42", "18:50", "18:58", "19:06", "19:14", "19:22", "19:30", "19:38", "19:46", "19:54", "20:02", "20:09", "20:18", "20:26", "20:34", "20:42", "20:50", "20:58", "21:06", "21:14", "21:22", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:29", "23:39", "23:49", "00:02", "00:12", "00:27", "00:42"],'G6':["06:07", "06:18", "06:26", "06:36", "06:45", "06:55", "07:05", "07:15", "07:26", "07:36", "07:46", "07:56", "08:06", "08:16", "08:26", "08:36", "08:46", "08:56", "09:06", "09:16", "09:26", "09:36", "09:46", "09:56", "10:03", "10:10", "10:18", "10:25", "10:33", "10:40", "10:48", "10:55", "11:03", "11:10", "11:18", "11:25", "11:33", "11:40", "11:47", "11:54", "12:01", "12:09", "12:16", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:45", "19:53", "20:01", "20:08", "20:17", "20:25", "20:33", "20:41", "20:49", "20:57", "21:05", "21:13", "21:21", "21:28", "21:38", "21:48", "21:58", "22:08", "22:18", "22:28", "22:38", "22:48", "22:58", "23:08", "23:18", "23:28", "23:38", "23:48", "00:01", "00:11", "00:25", "00:40"],'G7':["06:05", "06:16", "06:23", "06:33", "06:42", "06:52", "07:02", "07:12", "07:23", "07:33", "07:43", "07:53", "08:03", "08:13", "08:23", "08:33", "08:43", "08:53", "09:03", "09:13", "09:23", "09:33", "09:43", "09:53", "10:00", "10:08", "10:15", "10:23", "10:30", "10:38", "10:45", "10:53", "11:00", "11:08", "11:15", "11:23", "11:30", "11:38", "11:44", "11:51", "11:59", "12:06", "12:14", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:14", "16:22", "16:30", "16:38", "16:46", "16:54", "17:02", "17:10", "17:18", "17:26", "17:34", "17:42", "17:50", "17:58", "18:06", "18:14", "18:22", "18:30", "18:38", "18:46", "18:54", "19:02", "19:10", "19:18", "19:26", "19:34", "19:42", "19:50", "19:58", "20:05", "20:14", "20:22", "20:30", "20:38", "20:46", "20:54", "21:02", "21:10", "21:18", "21:25", "21:35", "21:45", "21:55", "22:05", "22:15", "22:25", "22:35", "22:45", "22:55", "23:05", "23:15", "23:25", "23:35", "23:45", "23:58", "00:08", "00:23", "00:38"],'G8':["06:03", "06:14", "06:21", "06:31", "06:40", "06:50", "07:00", "07:10", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:21", "09:31", "09:41", "09:51", "09:58", "10:06", "10:13", "10:21", "10:28", "10:36", "10:43", "10:51", "10:58", "11:06", "11:13", "11:21", "11:28", "11:36", "11:42", "11:49", "11:57", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "17:00", "17:08", "17:16", "17:24", "17:32", "17:40", "17:48", "17:56", "18:04", "18:12", "18:20", "18:28", "18:36", "18:44", "18:52", "19:00", "19:08", "19:16", "19:24", "19:32", "19:40", "19:48", "19:56", "20:03", "20:12", "20:20", "20:28", "20:36", "20:44", "20:52", "21:00", "21:08", "21:16", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:23", "23:33", "23:43", "23:56", "00:06", "00:21", "00:36"],'G8a':["06:01", "06:12", "06:20", "06:30", "06:39", "06:49", "06:59", "07:09", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:40", "09:50", "09:57", "10:04", "10:12", "10:19", "10:27", "10:34", "10:42", "10:49", "10:57", "11:04", "11:12", "11:19", "11:27", "11:34", "11:41", "11:48", "11:55", "12:03", "12:10", "12:19", "12:27", "12:35", "12:43", "12:51", "12:59", "13:07", "13:15", "13:23", "13:31", "13:39", "13:47", "13:55", "14:03", "14:11", "14:19", "14:27", "14:35", "14:43", "14:51", "14:59", "15:07", "15:15", "15:23", "15:31", "15:39", "15:47", "15:55", "16:03", "16:11", "16:19", "16:27", "16:35", "16:43", "16:51", "16:59", "17:07", "17:15", "17:23", "17:31", "17:39", "17:47", "17:55", "18:03", "18:11", "18:19", "18:27", "18:35", "18:43", "18:51", "18:59", "19:07", "19:15", "19:23", "19:31", "19:39", "19:47", "19:55", "20:02", "20:11", "20:19", "20:27", "20:35", "20:43", "20:51", "20:59", "21:07", "21:15", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:32", "23:42", "23:55", "00:05", "00:19", "00:34"],'G9':["06:00", "06:10", "06:18", "06:28", "06:37", "06:47", "06:57", "07:07", "07:18", "07:28", "07:38", "07:48", "07:58", "08:08", "08:18", "08:28", "08:38", "08:48", "08:58", "09:08", "09:18", "09:28", "09:38", "09:48", "09:55", "10:02", "10:10", "10:17", "10:25", "10:32", "10:40", "10:47", "10:55", "11:02", "11:10", "11:17", "11:25", "11:32", "11:39", "11:46", "11:53", "12:01", "12:08", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:45", "19:53", "20:00", "20:09", "20:17", "20:25", "20:33", "20:41", "20:49", "20:57", "21:05", "21:13", "21:20", "21:30", "21:40", "21:50", "22:00", "22:10", "22:20", "22:30", "22:40", "22:50", "23:00", "23:10", "23:20", "23:30", "23:40", "23:53", "00:03", "00:18", "00:33"],'G10':["06:08", "06:15", "06:25", "06:34", "06:44", "06:54", "07:04", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:15", "09:25", "09:35", "09:45", "09:52", "10:00", "10:07", "10:15", "10:22", "10:30", "10:37", "10:45", "10:52", "11:00", "11:07", "11:15", "11:22", "11:30", "11:36", "11:43", "11:51", "11:58", "12:06", "12:14", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:14", "16:22", "16:30", "16:38", "16:46", "16:54", "17:02", "17:10", "17:18", "17:26", "17:34", "17:42", "17:50", "17:58", "18:06", "18:14", "18:22", "18:30", "18:38", "18:46", "18:54", "19:02", "19:10", "19:18", "19:26", "19:34", "19:42", "19:50", "19:57", "20:06", "20:14", "20:22", "20:30", "20:38", "20:46", "20:54", "21:02", "21:10", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:17", "23:27", "23:37", "23:50", "00:00", "00:15", "00:30"],'G10a':["06:06", "06:14", "06:24", "06:33", "06:43", "06:53", "07:03", "07:14", "07:24", "07:34", "07:44", "07:54", "08:04", "08:14", "08:24", "08:34", "08:44", "08:54", "09:04", "09:14", "09:24", "09:34", "09:44", "09:51", "09:58", "10:06", "10:13", "10:21", "10:28", "10:36", "10:43", "10:51", "10:58", "11:06", "11:13", "11:21", "11:28", "11:35", "11:42", "11:49", "11:57", "12:04", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:53", "17:01", "17:09", "17:17", "17:25", "17:33", "17:41", "17:49", "17:57", "18:05", "18:13", "18:21", "18:29", "18:37", "18:45", "18:53", "19:01", "19:09", "19:17", "19:25", "19:33", "19:41", "19:49", "19:56", "20:05", "20:13", "20:21", "20:29", "20:37", "20:45", "20:53", "21:01", "21:09", "21:16", "21:26", "21:36", "21:46", "21:56", "22:06", "22:16", "22:26", "22:36", "22:46", "22:56", "23:06", "23:16", "23:26", "23:36", "23:49", "23:59", "00:14", "00:29"],'G11':["06:04", "06:12", "06:22", "06:31", "06:41", "06:51", "07:01", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:42", "09:49", "09:56", "10:04", "10:11", "10:19", "10:26", "10:34", "10:41", "10:49", "10:56", "11:04", "11:11", "11:19", "11:26", "11:33", "11:40", "11:47", "11:55", "12:02", "12:11", "12:19", "12:27", "12:35", "12:43", "12:51", "12:59", "13:07", "13:15", "13:23", "13:31", "13:39", "13:47", "13:55", "14:03", "14:11", "14:19", "14:27", "14:35", "14:43", "14:51", "14:59", "15:07", "15:15", "15:23", "15:31", "15:39", "15:47", "15:55", "16:03", "16:11", "16:19", "16:27", "16:35", "16:43", "16:51", "16:59", "17:07", "17:15", "17:23", "17:31", "17:39", "17:47", "17:55", "18:03", "18:11", "18:19", "18:27", "18:35", "18:43", "18:51", "18:59", "19:07", "19:15", "19:23", "19:31", "19:39", "19:47", "19:54", "20:03", "20:11", "20:19", "20:27", "20:35", "20:43", "20:51", "20:59", "21:07", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:24", "23:34", "23:47", "23:57", "00:12", "00:27"],'G12':["06:03", "06:10", "06:20", "06:29", "06:39", "06:49", "06:59", "07:10", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:40", "09:47", "09:55", "10:02", "10:10", "10:17", "10:25", "10:32", "10:40", "10:47", "10:55", "11:02", "11:10", "11:17", "11:25", "11:31", "11:38", "11:46", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:45", "19:52", "20:01", "20:09", "20:17", "20:25", "20:33", "20:41", "20:49", "20:57", "21:05", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:32", "23:45", "23:55", "00:10", "00:25"],'G13':["06:00", "06:07", "06:17", "06:26", "06:36", "06:46", "06:56", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:27", "09:37", "09:44", "09:52", "09:59", "10:07", "10:14", "10:22", "10:29", "10:37", "10:44", "10:52", "10:59", "11:07", "11:14", "11:22", "11:28", "11:35", "11:43", "11:50", "11:58", "12:06", "12:14", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:14", "16:22", "16:30", "16:38", "16:46", "16:54", "17:02", "17:10", "17:18", "17:26", "17:34", "17:42", "17:50", "17:58", "18:06", "18:14", "18:22", "18:30", "18:38", "18:46", "18:54", "19:02", "19:10", "19:18", "19:26", "19:34", "19:42", "19:49", "19:58", "20:06", "20:14", "20:22", "20:30", "20:38", "20:46", "20:54", "21:02", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:29", "23:42", "23:52", "00:07", "00:22"],'G14':["06:05", "06:15", "06:24", "06:34", "06:44", "06:54", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:15", "09:25", "09:35", "09:42", "09:50", "09:57", "10:05", "10:12", "10:20", "10:27", "10:35", "10:42", "10:50", "10:57", "11:05", "11:12", "11:20", "11:26", "11:33", "11:41", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "17:00", "17:08", "17:16", "17:24", "17:32", "17:40", "17:48", "17:56", "18:04", "18:12", "18:20", "18:28", "18:36", "18:44", "18:52", "19:00", "19:08", "19:16", "19:24", "19:32", "19:40", "19:47", "19:56", "20:04", "20:12", "20:20", "20:28", "20:36", "20:44", "20:52", "21:00", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:17", "23:27", "23:40", "23:50", "00:05", "00:20"],'G15':["06:04", "06:14", "06:23", "06:33", "06:43", "06:53", "07:04", "07:14", "07:24", "07:34", "07:44", "07:54", "08:04", "08:14", "08:24", "08:34", "08:44", "08:54", "09:04", "09:14", "09:24", "09:34", "09:41", "09:48", "09:56", "10:03", "10:11", "10:18", "10:26", "10:33", "10:41", "10:48", "10:56", "11:03", "11:11", "11:18", "11:25", "11:32", "11:39", "11:47", "11:54", "12:03", "12:11", "12:19", "12:27", "12:35", "12:43", "12:51", "12:59", "13:07", "13:15", "13:23", "13:31", "13:39", "13:47", "13:55", "14:03", "14:11", "14:19", "14:27", "14:35", "14:43", "14:51", "14:59", "15:07", "15:15", "15:23", "15:31", "15:39", "15:47", "15:55", "16:03", "16:11", "16:19", "16:27", "16:35", "16:43", "16:51", "16:59", "17:07", "17:15", "17:23", "17:31", "17:39", "17:47", "17:55", "18:03", "18:11", "18:19", "18:27", "18:35", "18:43", "18:51", "18:59", "19:07", "19:15", "19:23", "19:31", "19:39", "19:46", "19:55", "20:03", "20:11", "20:19", "20:27", "20:35", "20:43", "20:51", "20:59", "21:06", "21:16", "21:26", "21:36", "21:46", "21:56", "22:06", "22:16", "22:26", "22:36", "22:46", "22:56", "23:06", "23:16", "23:26", "23:39", "23:49", "00:04", "00:19"],'G16':["06:02", "06:12", "06:21", "06:31", "06:41", "06:51", "07:02", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:39", "09:46", "09:54", "10:01", "10:09", "10:16", "10:24", "10:31", "10:39", "10:46", "10:54", "11:01", "11:09", "11:16", "11:23", "11:30", "11:37", "11:45", "11:52", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:05", "17:13", "17:21", "17:29", "17:37", "17:45", "17:53", "18:01", "18:09", "18:17", "18:25", "18:33", "18:41", "18:49", "18:57", "19:05", "19:13", "19:21", "19:29", "19:37", "19:44", "19:53", "20:01", "20:09", "20:17", "20:25", "20:33", "20:41", "20:49", "20:57", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:24", "23:37", "23:47", "00:02", "00:17"],'G17':["06:00", "06:10", "06:19", "06:29", "06:39", "06:49", "07:00", "07:10", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:37", "09:44", "09:52", "09:59", "10:07", "10:14", "10:22", "10:29", "10:37", "10:44", "10:52", "10:59", "11:07", "11:14", "11:21", "11:28", "11:35", "11:43", "11:50", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:39", "16:47", "16:55", "17:03", "17:11", "17:19", "17:27", "17:35", "17:43", "17:51", "17:59", "18:07", "18:15", "18:23", "18:31", "18:39", "18:47", "18:55", "19:03", "19:11", "19:19", "19:27", "19:35", "19:42", "19:51", "19:59", "20:07", "20:15", "20:23", "20:31", "20:39", "20:47", "20:55", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:35", "23:45", "00:00", "00:15"]};
+const THRD={'G0':["06:00", "06:10", "06:18", "06:28", "06:38", "06:48", "06:58", "07:08", "07:18", "07:28", "07:38", "07:48", "07:58", "08:08", "08:18", "08:28", "08:38", "08:48", "08:56", "09:04", "09:12", "09:20", "09:28", "09:36", "09:44", "09:52", "10:00", "10:08", "10:16", "10:24", "10:32", "10:40", "10:48", "10:56", "11:04", "11:12", "11:20", "11:28", "11:36", "11:44", "11:52", "12:00", "12:08", "12:16", "12:24", "12:32", "12:40", "12:48", "12:56", "13:04", "13:12", "13:20", "13:28", "13:36", "13:44", "13:52", "14:00", "14:08", "14:16", "14:24", "14:32", "14:40", "14:48", "14:56", "15:04", "15:12", "15:20", "15:28", "15:36", "15:44", "15:52", "16:00", "16:08", "16:16", "16:24", "16:31", "16:39", "16:46", "16:54", "17:01", "17:09", "17:16", "17:24", "17:31", "17:39", "17:46", "17:54", "18:01", "18:09", "18:16", "18:24", "18:31", "18:39", "18:46", "18:54", "19:01", "19:09", "19:16", "19:24", "19:31", "19:39", "19:46", "19:53", "20:00", "20:10", "20:20", "20:30", "20:40", "20:50", "21:00", "21:10", "21:20", "21:30", "21:40", "21:50", "22:00", "22:10", "22:20", "22:30", "22:40", "22:50", "23:00", "23:20", "23:40", "00:00"],'G3':["06:02", "06:12", "06:20", "06:30", "06:40", "06:50", "07:00", "07:10", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "08:58", "09:06", "09:14", "09:22", "09:30", "09:38", "09:46", "09:54", "10:02", "10:10", "10:18", "10:26", "10:34", "10:42", "10:50", "10:58", "11:06", "11:14", "11:22", "11:30", "11:38", "11:46", "11:54", "12:02", "12:10", "12:18", "12:26", "12:34", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:33", "16:41", "16:48", "16:56", "17:03", "17:11", "17:18", "17:26", "17:33", "17:41", "17:48", "17:56", "18:03", "18:11", "18:18", "18:26", "18:33", "18:41", "18:48", "18:56", "19:03", "19:11", "19:18", "19:26", "19:33", "19:41", "19:48", "19:55", "20:02", "20:12", "20:22", "20:32", "20:42", "20:52", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:22", "23:42", "00:02"],'G4':["06:04", "06:14", "06:22", "06:32", "06:42", "06:52", "07:02", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:00", "09:08", "09:16", "09:24", "09:32", "09:40", "09:48", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:35", "16:43", "16:50", "16:58", "17:05", "17:13", "17:20", "17:28", "17:35", "17:43", "17:50", "17:58", "18:05", "18:13", "18:20", "18:28", "18:35", "18:43", "18:50", "18:58", "19:05", "19:13", "19:20", "19:28", "19:35", "19:43", "19:50", "19:57", "20:04", "20:14", "20:24", "20:34", "20:44", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:24", "23:44", "00:04"],'G5':["06:00", "06:07", "06:17", "06:25", "06:35", "06:45", "06:55", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:03", "09:11", "09:19", "09:27", "09:35", "09:43", "09:51", "09:59", "10:07", "10:15", "10:23", "10:31", "10:39", "10:47", "10:55", "11:03", "11:11", "11:19", "11:27", "11:35", "11:43", "11:51", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:38", "16:46", "16:53", "17:01", "17:08", "17:16", "17:23", "17:31", "17:38", "17:46", "17:53", "18:01", "18:08", "18:16", "18:23", "18:31", "18:38", "18:46", "18:53", "19:01", "19:08", "19:16", "19:23", "19:31", "19:38", "19:46", "19:53", "20:00", "20:07", "20:17", "20:27", "20:37", "20:47", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:27", "23:47", "00:07"],'G6':["06:01", "06:09", "06:19", "06:27", "06:37", "06:47", "06:57", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:05", "09:13", "09:21", "09:29", "09:37", "09:45", "09:53", "10:01", "10:09", "10:17", "10:25", "10:33", "10:41", "10:49", "10:57", "11:05", "11:13", "11:21", "11:29", "11:37", "11:45", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:40", "16:48", "16:55", "17:03", "17:10", "17:18", "17:25", "17:33", "17:40", "17:48", "17:55", "18:03", "18:10", "18:18", "18:25", "18:33", "18:40", "18:48", "18:55", "19:03", "19:10", "19:18", "19:25", "19:33", "19:40", "19:48", "19:55", "20:02", "20:09", "20:19", "20:29", "20:39", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:29", "23:49", "00:09"],'G7':["06:04", "06:11", "06:21", "06:29", "06:39", "06:49", "06:59", "07:09", "07:19", "07:29", "07:39", "07:49", "07:59", "08:09", "08:19", "08:29", "08:39", "08:49", "08:59", "09:07", "09:15", "09:23", "09:31", "09:39", "09:47", "09:55", "10:03", "10:11", "10:19", "10:27", "10:35", "10:43", "10:51", "10:59", "11:07", "11:15", "11:23", "11:31", "11:39", "11:47", "11:55", "12:03", "12:11", "12:19", "12:27", "12:35", "12:43", "12:51", "12:59", "13:07", "13:15", "13:23", "13:31", "13:39", "13:47", "13:55", "14:03", "14:11", "14:19", "14:27", "14:35", "14:43", "14:51", "14:59", "15:07", "15:15", "15:23", "15:31", "15:39", "15:47", "15:55", "16:03", "16:11", "16:19", "16:27", "16:35", "16:43", "16:50", "16:58", "17:05", "17:13", "17:20", "17:28", "17:35", "17:43", "17:50", "17:58", "18:05", "18:13", "18:20", "18:28", "18:35", "18:43", "18:50", "18:58", "19:05", "19:13", "19:20", "19:28", "19:35", "19:43", "19:50", "19:57", "20:04", "20:11", "20:21", "20:31", "20:41", "20:51", "21:01", "21:11", "21:21", "21:31", "21:41", "21:51", "22:01", "22:11", "22:21", "22:31", "22:41", "22:51", "23:01", "23:11", "23:31", "23:51", "00:11"],'G8':["06:06", "06:13", "06:23", "06:31", "06:41", "06:51", "07:01", "07:11", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:09", "09:17", "09:25", "09:33", "09:41", "09:49", "09:57", "10:05", "10:13", "10:21", "10:29", "10:37", "10:45", "10:53", "11:01", "11:09", "11:17", "11:25", "11:33", "11:41", "11:49", "11:57", "12:05", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:52", "17:00", "17:07", "17:15", "17:22", "17:30", "17:37", "17:45", "17:52", "18:00", "18:07", "18:15", "18:22", "18:30", "18:37", "18:45", "18:52", "19:00", "19:07", "19:15", "19:22", "19:30", "19:37", "19:45", "19:52", "19:59", "20:06", "20:13", "20:23", "20:33", "20:43", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:33", "23:53", "00:13"],'G8a':["06:07", "06:15", "06:25", "06:33", "06:43", "06:53", "07:03", "07:13", "07:23", "07:33", "07:43", "07:53", "08:03", "08:13", "08:23", "08:33", "08:43", "08:53", "09:03", "09:11", "09:19", "09:27", "09:35", "09:43", "09:51", "09:59", "10:07", "10:15", "10:23", "10:31", "10:39", "10:47", "10:55", "11:03", "11:11", "11:19", "11:27", "11:35", "11:43", "11:51", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:39", "16:46", "16:54", "17:01", "17:09", "17:16", "17:24", "17:31", "17:39", "17:46", "17:54", "18:01", "18:09", "18:16", "18:24", "18:31", "18:39", "18:46", "18:54", "19:01", "19:09", "19:16", "19:24", "19:31", "19:39", "19:46", "19:54", "20:01", "20:08", "20:15", "20:25", "20:35", "20:45", "20:55", "21:05", "21:15", "21:25", "21:35", "21:45", "21:55", "22:05", "22:15", "22:25", "22:35", "22:45", "22:55", "23:05", "23:15", "23:35", "23:55", "00:15"],'G9':["06:00", "06:09", "06:17", "06:27", "06:35", "06:45", "06:55", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:13", "09:21", "09:29", "09:37", "09:45", "09:53", "10:01", "10:09", "10:17", "10:25", "10:33", "10:41", "10:49", "10:57", "11:05", "11:13", "11:21", "11:29", "11:37", "11:45", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:48", "16:56", "17:03", "17:11", "17:18", "17:26", "17:33", "17:41", "17:48", "17:56", "18:03", "18:11", "18:18", "18:26", "18:33", "18:41", "18:48", "18:56", "19:03", "19:11", "19:18", "19:26", "19:33", "19:41", "19:48", "19:56", "20:03", "20:10", "20:17", "20:27", "20:37", "20:47", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:17", "23:37", "23:57", "00:17"],'G10':["06:02", "06:12", "06:19", "06:29", "06:37", "06:47", "06:57", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:15", "09:23", "09:31", "09:39", "09:47", "09:55", "10:03", "10:11", "10:19", "10:27", "10:35", "10:43", "10:51", "10:59", "11:07", "11:15", "11:23", "11:31", "11:39", "11:47", "11:55", "12:03", "12:11", "12:19", "12:27", "12:35", "12:43", "12:51", "12:59", "13:07", "13:15", "13:23", "13:31", "13:39", "13:47", "13:55", "14:03", "14:11", "14:19", "14:27", "14:35", "14:43", "14:51", "14:59", "15:07", "15:15", "15:23", "15:31", "15:39", "15:47", "15:55", "16:03", "16:11", "16:19", "16:27", "16:35", "16:43", "16:51", "16:58", "17:06", "17:13", "17:21", "17:28", "17:36", "17:43", "17:51", "17:58", "18:06", "18:13", "18:21", "18:28", "18:36", "18:43", "18:51", "18:58", "19:06", "19:13", "19:21", "19:28", "19:36", "19:43", "19:51", "19:58", "20:05", "20:12", "20:19", "20:29", "20:39", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:39", "23:59", "00:19"],'G10a':["06:04", "06:14", "06:21", "06:31", "06:39", "06:49", "06:59", "07:09", "07:19", "07:29", "07:39", "07:49", "07:59", "08:09", "08:19", "08:29", "08:39", "08:49", "08:59", "09:09", "09:17", "09:25", "09:33", "09:41", "09:49", "09:57", "10:05", "10:13", "10:21", "10:29", "10:37", "10:45", "10:53", "11:01", "11:09", "11:17", "11:25", "11:33", "11:41", "11:49", "11:57", "12:05", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:53", "17:00", "17:08", "17:15", "17:23", "17:30", "17:38", "17:45", "17:53", "18:00", "18:08", "18:15", "18:23", "18:30", "18:38", "18:45", "18:53", "19:00", "19:08", "19:15", "19:23", "19:30", "19:38", "19:45", "19:53", "20:00", "20:07", "20:14", "20:21", "20:31", "20:41", "20:51", "21:01", "21:11", "21:21", "21:31", "21:41", "21:51", "22:01", "22:11", "22:21", "22:31", "22:41", "22:51", "23:01", "23:11", "23:21", "23:41", "00:01", "00:21"],'G11':["06:05", "06:15", "06:23", "06:33", "06:41", "06:51", "07:01", "07:11", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:19", "09:27", "09:35", "09:43", "09:51", "09:59", "10:07", "10:15", "10:23", "10:31", "10:39", "10:47", "10:55", "11:03", "11:11", "11:19", "11:27", "11:35", "11:43", "11:51", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:39", "16:47", "16:54", "17:02", "17:09", "17:17", "17:24", "17:32", "17:39", "17:47", "17:54", "18:02", "18:09", "18:17", "18:24", "18:32", "18:39", "18:47", "18:54", "19:02", "19:09", "19:17", "19:24", "19:32", "19:39", "19:47", "19:54", "20:02", "20:09", "20:16", "20:23", "20:33", "20:43", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:23", "23:43", "00:03", "00:22"],'G12':["06:07", "06:17", "06:24", "06:34", "06:42", "06:52", "07:02", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:20", "09:28", "09:36", "09:44", "09:52", "10:00", "10:08", "10:16", "10:24", "10:32", "10:40", "10:48", "10:56", "11:04", "11:12", "11:20", "11:28", "11:36", "11:44", "11:52", "12:00", "12:08", "12:16", "12:24", "12:32", "12:40", "12:48", "12:56", "13:04", "13:12", "13:20", "13:28", "13:36", "13:44", "13:52", "14:00", "14:08", "14:16", "14:24", "14:32", "14:40", "14:48", "14:56", "15:04", "15:12", "15:20", "15:28", "15:36", "15:44", "15:52", "16:00", "16:08", "16:16", "16:24", "16:32", "16:40", "16:48", "16:56", "17:03", "17:11", "17:18", "17:26", "17:33", "17:41", "17:48", "17:56", "18:03", "18:11", "18:18", "18:26", "18:33", "18:41", "18:48", "18:56", "19:03", "19:11", "19:18", "19:26", "19:33", "19:41", "19:48", "19:56", "20:03", "20:10", "20:17", "20:24", "20:34", "20:44", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:25", "23:44", "00:04", "00:24"],'G13':["06:00", "06:10", "06:20", "06:28", "06:38", "06:46", "06:56", "07:06", "07:16", "07:26", "07:36", "07:46", "07:56", "08:06", "08:16", "08:26", "08:36", "08:46", "08:56", "09:06", "09:16", "09:24", "09:32", "09:40", "09:48", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:20", "16:28", "16:36", "16:44", "16:52", "16:59", "17:07", "17:14", "17:22", "17:29", "17:37", "17:44", "17:52", "17:59", "18:07", "18:14", "18:22", "18:29", "18:37", "18:44", "18:52", "18:59", "19:07", "19:14", "19:22", "19:29", "19:37", "19:44", "19:52", "19:59", "20:07", "20:14", "20:21", "20:28", "20:38", "20:48", "20:58", "21:08", "21:18", "21:28", "21:38", "21:48", "21:58", "22:08", "22:18", "22:28", "22:38", "22:48", "22:58", "23:08", "23:18", "23:28", "23:48", "00:08", "00:27"],'G14':["06:01", "06:12", "06:22", "06:29", "06:39", "06:47", "06:57", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:25", "09:33", "09:41", "09:49", "09:57", "10:05", "10:13", "10:21", "10:29", "10:37", "10:45", "10:53", "11:01", "11:09", "11:17", "11:25", "11:33", "11:41", "11:49", "11:57", "12:05", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:37", "16:45", "16:53", "17:01", "17:08", "17:16", "17:23", "17:31", "17:38", "17:46", "17:53", "18:01", "18:08", "18:16", "18:23", "18:31", "18:38", "18:46", "18:53", "19:01", "19:08", "19:16", "19:23", "19:31", "19:38", "19:46", "19:53", "20:01", "20:08", "20:15", "20:22", "20:29", "20:39", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:30", "23:49", "00:09", "00:29"],'G15':["06:03", "06:14", "06:24", "06:31", "06:41", "06:49", "06:59", "07:09", "07:19", "07:29", "07:39", "07:49", "07:59", "08:09", "08:19", "08:29", "08:39", "08:49", "08:59", "09:09", "09:19", "09:27", "09:35", "09:43", "09:51", "09:59", "10:07", "10:15", "10:23", "10:31", "10:39", "10:47", "10:55", "11:03", "11:11", "11:19", "11:27", "11:35", "11:43", "11:51", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:23", "16:31", "16:39", "16:47", "16:55", "17:02", "17:10", "17:17", "17:25", "17:32", "17:40", "17:47", "17:55", "18:02", "18:10", "18:17", "18:25", "18:32", "18:40", "18:47", "18:55", "19:02", "19:10", "19:17", "19:25", "19:32", "19:40", "19:47", "19:55", "20:02", "20:10", "20:17", "20:24", "20:31", "20:41", "20:51", "21:01", "21:11", "21:21", "21:31", "21:41", "21:51", "22:01", "22:11", "22:21", "22:31", "22:41", "22:51", "23:01", "23:11", "23:21", "23:31", "23:51", "00:11", "00:30"],'G16':["06:05", "06:16", "06:25", "06:33", "06:43", "06:51", "07:01", "07:11", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:21", "09:29", "09:37", "09:45", "09:53", "10:01", "10:09", "10:17", "10:25", "10:33", "10:41", "10:49", "10:57", "11:05", "11:13", "11:21", "11:29", "11:37", "11:45", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:25", "16:33", "16:41", "16:49", "16:57", "17:04", "17:12", "17:19", "17:27", "17:34", "17:42", "17:49", "17:57", "18:04", "18:12", "18:19", "18:27", "18:34", "18:42", "18:49", "18:57", "19:04", "19:12", "19:19", "19:27", "19:34", "19:42", "19:49", "19:57", "20:04", "20:12", "20:19", "20:26", "20:33", "20:43", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:23", "23:33", "23:53", "00:13", "00:32"],'G17':["06:12", "06:22", "06:32", "06:37", "06:46", "06:54", "07:04", "07:14", "07:24", "07:34", "07:44", "07:54", "08:04", "08:14", "08:24", "08:34", "08:44", "08:54", "09:04", "09:14", "09:24", "09:32", "09:40", "09:48", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "16:00", "16:08", "16:15", "16:23", "16:30", "16:38", "16:45", "16:53", "17:01", "17:08", "17:15", "17:23", "17:30", "17:38", "17:45", "17:53", "18:00", "18:08", "18:15", "18:23", "18:30", "18:38", "18:45", "18:53", "19:00", "19:08", "19:15", "19:23", "19:30", "19:38", "19:45", "19:53", "20:00", "20:08", "20:15", "20:25", "20:30", "20:36", "20:46", "20:56", "21:06", "21:16", "21:26", "21:36", "21:46", "21:56", "22:06", "22:16", "22:26", "22:36", "22:46", "22:56", "23:06", "23:16", "23:28", "23:37", "23:56", "00:17", "00:37"]};
+const THRU={'G0':["06:07", "06:21", "06:31", "06:36", "06:45", "06:55", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:58", "09:08", "09:16", "09:25", "09:38", "09:48", "09:56", "10:05", "10:13", "10:21", "10:29", "10:37", "10:45", "10:53", "11:01", "11:09", "11:17", "11:25", "11:33", "11:41", "11:49", "11:57", "12:05", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:29", "16:36", "16:43", "16:51", "16:58", "17:06", "17:13", "17:21", "17:28", "17:36", "17:43", "17:51", "17:58", "18:06", "18:13", "18:21", "18:28", "18:36", "18:43", "18:51", "18:58", "19:06", "19:13", "19:21", "19:28", "19:36", "19:43", "19:50", "19:57", "20:06", "20:14", "20:21", "20:27", "20:36", "20:44", "20:51", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:08", "23:17", "23:28", "23:37", "23:48", "23:57", "00:11", "00:21", "00:36", "00:51"],'G3':["06:04", "06:14", "06:25", "06:32", "06:42", "06:51", "07:01", "07:11", "07:21", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:42", "09:52", "10:02", "10:10", "10:18", "10:26", "10:34", "10:42", "10:50", "10:58", "11:06", "11:14", "11:22", "11:30", "11:38", "11:46", "11:54", "12:02", "12:10", "12:18", "12:26", "12:34", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:54", "16:02", "16:10", "16:18", "16:26", "16:33", "16:39", "16:47", "16:54", "17:02", "17:09", "17:17", "17:24", "17:32", "17:39", "17:47", "17:54", "18:02", "18:09", "18:17", "18:24", "18:32", "18:39", "18:47", "18:54", "19:02", "19:09", "19:17", "19:24", "19:32", "19:39", "19:47", "19:54", "20:02", "20:09", "20:17", "20:24", "20:32", "20:39", "20:47", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:24", "23:34", "23:44", "23:54", "00:07", "00:17", "00:32", "00:47"],'G4':["06:02", "06:12", "06:23", "06:30", "06:40", "06:49", "06:59", "07:09", "07:19", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:40", "09:50", "10:00", "10:08", "10:16", "10:24", "10:32", "10:40", "10:48", "10:56", "11:04", "11:12", "11:20", "11:28", "11:36", "11:44", "11:52", "12:00", "12:08", "12:16", "12:24", "12:32", "12:40", "12:48", "12:56", "13:04", "13:12", "13:20", "13:28", "13:36", "13:44", "13:52", "14:00", "14:08", "14:16", "14:24", "14:32", "14:40", "14:48", "14:56", "15:04", "15:12", "15:20", "15:28", "15:36", "15:44", "15:52", "16:00", "16:08", "16:16", "16:24", "16:31", "16:37", "16:45", "16:52", "17:00", "17:07", "17:15", "17:22", "17:30", "17:37", "17:45", "17:52", "18:00", "18:07", "18:15", "18:22", "18:30", "18:37", "18:45", "18:52", "19:00", "19:07", "19:15", "19:22", "19:30", "19:37", "19:45", "19:52", "20:00", "20:07", "20:15", "20:22", "20:30", "20:37", "20:45", "20:52", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:32", "23:42", "23:52", "00:05", "00:15", "00:30", "00:45"],'G5':["06:00", "06:09", "06:20", "06:27", "06:37", "06:46", "06:56", "07:06", "07:16", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:27", "09:37", "09:47", "09:57", "10:05", "10:13", "10:21", "10:29", "10:37", "10:45", "10:53", "11:01", "11:09", "11:17", "11:25", "11:33", "11:41", "11:49", "11:57", "12:05", "12:13", "12:21", "12:29", "12:37", "12:45", "12:53", "13:01", "13:09", "13:17", "13:25", "13:33", "13:41", "13:49", "13:57", "14:05", "14:13", "14:21", "14:29", "14:37", "14:45", "14:53", "15:01", "15:09", "15:17", "15:25", "15:33", "15:41", "15:49", "15:57", "16:05", "16:13", "16:21", "16:28", "16:34", "16:42", "16:49", "16:57", "17:04", "17:12", "17:19", "17:27", "17:34", "17:42", "17:49", "17:57", "18:04", "18:12", "18:19", "18:27", "18:34", "18:42", "18:49", "18:57", "19:04", "19:12", "19:19", "19:27", "19:34", "19:42", "19:49", "19:57", "20:04", "20:12", "20:19", "20:27", "20:34", "20:42", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:29", "23:39", "23:49", "00:02", "00:12", "00:27", "00:42"],'G6':["06:07", "06:18", "06:26", "06:36", "06:45", "06:55", "07:05", "07:15", "07:26", "07:36", "07:46", "07:56", "08:06", "08:16", "08:26", "08:36", "08:46", "08:56", "09:06", "09:16", "09:26", "09:36", "09:46", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:12", "16:19", "16:27", "16:33", "16:40", "16:48", "16:55", "17:03", "17:10", "17:18", "17:25", "17:33", "17:40", "17:48", "17:55", "18:03", "18:10", "18:18", "18:25", "18:33", "18:40", "18:48", "18:55", "19:03", "19:10", "19:18", "19:25", "19:33", "19:40", "19:48", "19:55", "20:03", "20:10", "20:18", "20:25", "20:33", "20:40", "20:48", "20:58", "21:08", "21:18", "21:28", "21:38", "21:48", "21:58", "22:08", "22:18", "22:28", "22:38", "22:48", "22:58", "23:08", "23:18", "23:28", "23:38", "23:48", "00:01", "00:11", "00:25", "00:40"],'G7':["06:05", "06:16", "06:23", "06:33", "06:42", "06:52", "07:02", "07:12", "07:23", "07:33", "07:43", "07:53", "08:03", "08:13", "08:23", "08:33", "08:43", "08:53", "09:03", "09:13", "09:23", "09:33", "09:43", "09:53", "10:01", "10:09", "10:17", "10:25", "10:33", "10:41", "10:49", "10:57", "11:05", "11:13", "11:21", "11:29", "11:37", "11:45", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:17", "16:24", "16:30", "16:38", "16:45", "16:53", "17:00", "17:08", "17:15", "17:23", "17:30", "17:38", "17:45", "17:53", "18:00", "18:08", "18:15", "18:23", "18:30", "18:38", "18:45", "18:53", "19:00", "19:08", "19:15", "19:23", "19:30", "19:38", "19:45", "19:53", "20:00", "20:08", "20:15", "20:23", "20:30", "20:38", "20:45", "20:55", "21:05", "21:15", "21:25", "21:35", "21:45", "21:55", "22:05", "22:15", "22:25", "22:35", "22:45", "22:55", "23:05", "23:15", "23:25", "23:35", "23:45", "23:58", "00:08", "00:23", "00:38"],'G8':["06:03", "06:14", "06:21", "06:31", "06:40", "06:50", "07:00", "07:10", "07:21", "07:31", "07:41", "07:51", "08:01", "08:11", "08:21", "08:31", "08:41", "08:51", "09:01", "09:11", "09:21", "09:31", "09:41", "09:51", "09:59", "10:07", "10:15", "10:23", "10:31", "10:39", "10:47", "10:55", "11:03", "11:11", "11:19", "11:27", "11:35", "11:43", "11:51", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:07", "16:15", "16:22", "16:28", "16:36", "16:43", "16:51", "16:58", "17:06", "17:13", "17:21", "17:28", "17:36", "17:43", "17:51", "17:58", "18:06", "18:13", "18:21", "18:28", "18:36", "18:43", "18:51", "18:58", "19:06", "19:13", "19:21", "19:28", "19:36", "19:43", "19:51", "19:58", "20:06", "20:13", "20:21", "20:28", "20:36", "20:43", "20:53", "21:03", "21:13", "21:23", "21:33", "21:43", "21:53", "22:03", "22:13", "22:23", "22:33", "22:43", "22:53", "23:03", "23:13", "23:23", "23:33", "23:43", "23:56", "00:06", "00:21", "00:36"],'G8a':["06:01", "06:12", "06:20", "06:30", "06:39", "06:49", "06:59", "07:09", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:40", "09:50", "09:58", "10:06", "10:14", "10:22", "10:30", "10:38", "10:46", "10:54", "11:02", "11:10", "11:18", "11:26", "11:34", "11:42", "11:50", "11:58", "12:06", "12:14", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:06", "16:13", "16:21", "16:27", "16:34", "16:42", "16:49", "16:57", "17:04", "17:12", "17:19", "17:27", "17:34", "17:42", "17:49", "17:57", "18:04", "18:12", "18:19", "18:27", "18:34", "18:42", "18:49", "18:57", "19:04", "19:12", "19:19", "19:27", "19:34", "19:42", "19:49", "19:57", "20:04", "20:12", "20:19", "20:27", "20:34", "20:42", "20:52", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:32", "23:42", "23:55", "00:05", "00:19", "00:34"],'G9':["06:00", "06:10", "06:18", "06:28", "06:37", "06:47", "06:57", "07:07", "07:18", "07:28", "07:38", "07:48", "07:58", "08:08", "08:18", "08:28", "08:38", "08:48", "08:58", "09:08", "09:18", "09:28", "09:38", "09:48", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:11", "16:19", "16:25", "16:32", "16:40", "16:47", "16:55", "17:02", "17:10", "17:17", "17:25", "17:32", "17:40", "17:47", "17:55", "18:02", "18:10", "18:17", "18:25", "18:32", "18:40", "18:47", "18:55", "19:02", "19:10", "19:17", "19:25", "19:32", "19:40", "19:47", "19:55", "20:02", "20:10", "20:17", "20:25", "20:32", "20:40", "20:50", "21:00", "21:10", "21:20", "21:30", "21:40", "21:50", "22:00", "22:10", "22:20", "22:30", "22:40", "22:50", "23:00", "23:10", "23:20", "23:30", "23:40", "23:53", "00:03", "00:18", "00:33"],'G10':["06:08", "06:15", "06:25", "06:34", "06:44", "06:54", "07:04", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:15", "09:25", "09:35", "09:45", "09:53", "10:01", "10:09", "10:17", "10:25", "10:33", "10:41", "10:49", "10:57", "11:05", "11:13", "11:21", "11:29", "11:37", "11:45", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:09", "16:16", "16:22", "16:30", "16:37", "16:45", "16:52", "17:00", "17:07", "17:15", "17:22", "17:30", "17:37", "17:45", "17:52", "18:00", "18:07", "18:15", "18:22", "18:30", "18:37", "18:45", "18:52", "19:00", "19:07", "19:15", "19:22", "19:30", "19:37", "19:45", "19:52", "20:00", "20:07", "20:15", "20:22", "20:30", "20:37", "20:47", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:17", "23:27", "23:37", "23:50", "00:00", "00:15", "00:30"],'G10a':["06:06", "06:14", "06:24", "06:33", "06:43", "06:53", "07:03", "07:14", "07:24", "07:34", "07:44", "07:54", "08:04", "08:14", "08:24", "08:34", "08:44", "08:54", "09:04", "09:14", "09:24", "09:34", "09:44", "09:52", "10:00", "10:08", "10:16", "10:24", "10:32", "10:40", "10:48", "10:56", "11:04", "11:12", "11:20", "11:28", "11:36", "11:44", "11:52", "12:00", "12:08", "12:16", "12:24", "12:32", "12:40", "12:48", "12:56", "13:04", "13:12", "13:20", "13:28", "13:36", "13:44", "13:52", "14:00", "14:08", "14:16", "14:24", "14:32", "14:40", "14:48", "14:56", "15:04", "15:12", "15:20", "15:28", "15:36", "15:44", "15:52", "16:00", "16:07", "16:15", "16:21", "16:28", "16:36", "16:43", "16:51", "16:58", "17:06", "17:13", "17:21", "17:28", "17:36", "17:43", "17:51", "17:58", "18:06", "18:13", "18:21", "18:28", "18:36", "18:43", "18:51", "18:58", "19:06", "19:13", "19:21", "19:28", "19:36", "19:43", "19:51", "19:58", "20:06", "20:13", "20:21", "20:28", "20:36", "20:46", "20:56", "21:06", "21:16", "21:26", "21:36", "21:46", "21:56", "22:06", "22:16", "22:26", "22:36", "22:46", "22:56", "23:06", "23:16", "23:26", "23:36", "23:49", "23:59", "00:14", "00:29"],'G11':["06:04", "06:12", "06:22", "06:31", "06:41", "06:51", "07:01", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:42", "09:50", "09:58", "10:06", "10:14", "10:22", "10:30", "10:38", "10:46", "10:54", "11:02", "11:10", "11:18", "11:26", "11:34", "11:42", "11:50", "11:58", "12:06", "12:14", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:58", "16:05", "16:13", "16:19", "16:26", "16:34", "16:41", "16:49", "16:56", "17:04", "17:11", "17:19", "17:26", "17:34", "17:41", "17:49", "17:56", "18:04", "18:11", "18:19", "18:26", "18:34", "18:41", "18:49", "18:56", "19:04", "19:11", "19:19", "19:26", "19:34", "19:41", "19:49", "19:56", "20:04", "20:11", "20:19", "20:26", "20:34", "20:44", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:24", "23:34", "23:47", "23:57", "00:12", "00:27"],'G12':["06:03", "06:10", "06:20", "06:29", "06:39", "06:49", "06:59", "07:10", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:40", "09:48", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:56", "16:04", "16:11", "16:17", "16:25", "16:32", "16:40", "16:47", "16:55", "17:02", "17:10", "17:17", "17:25", "17:32", "17:40", "17:47", "17:55", "18:02", "18:10", "18:17", "18:25", "18:32", "18:40", "18:47", "18:55", "19:02", "19:10", "19:17", "19:25", "19:32", "19:40", "19:47", "19:55", "20:02", "20:10", "20:17", "20:25", "20:32", "20:42", "20:52", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:32", "23:45", "23:55", "00:10", "00:25"],'G13':["06:00", "06:07", "06:17", "06:26", "06:36", "06:46", "06:56", "07:07", "07:17", "07:27", "07:37", "07:47", "07:57", "08:07", "08:17", "08:27", "08:37", "08:47", "08:57", "09:07", "09:17", "09:27", "09:37", "09:45", "09:53", "10:01", "10:09", "10:17", "10:25", "10:33", "10:41", "10:49", "10:57", "11:05", "11:13", "11:21", "11:29", "11:37", "11:45", "11:53", "12:01", "12:09", "12:17", "12:25", "12:33", "12:41", "12:49", "12:57", "13:05", "13:13", "13:21", "13:29", "13:37", "13:45", "13:53", "14:01", "14:09", "14:17", "14:25", "14:33", "14:41", "14:49", "14:57", "15:05", "15:13", "15:21", "15:29", "15:37", "15:45", "15:53", "16:01", "16:08", "16:14", "16:22", "16:29", "16:37", "16:44", "16:52", "16:59", "17:07", "17:14", "17:22", "17:29", "17:37", "17:44", "17:52", "17:59", "18:07", "18:14", "18:22", "18:29", "18:37", "18:44", "18:52", "18:59", "19:07", "19:14", "19:22", "19:29", "19:37", "19:44", "19:52", "19:59", "20:07", "20:14", "20:22", "20:29", "20:39", "20:49", "20:59", "21:09", "21:19", "21:29", "21:39", "21:49", "21:59", "22:09", "22:19", "22:29", "22:39", "22:49", "22:59", "23:09", "23:19", "23:29", "23:42", "23:52", "00:07", "00:22"],'G14':["06:05", "06:15", "06:24", "06:34", "06:44", "06:54", "07:05", "07:15", "07:25", "07:35", "07:45", "07:55", "08:05", "08:15", "08:25", "08:35", "08:45", "08:55", "09:05", "09:15", "09:25", "09:35", "09:43", "09:51", "09:59", "10:07", "10:15", "10:23", "10:31", "10:39", "10:47", "10:55", "11:03", "11:11", "11:19", "11:27", "11:35", "11:43", "11:51", "11:59", "12:07", "12:15", "12:23", "12:31", "12:39", "12:47", "12:55", "13:03", "13:11", "13:19", "13:27", "13:35", "13:43", "13:51", "13:59", "14:07", "14:15", "14:23", "14:31", "14:39", "14:47", "14:55", "15:03", "15:11", "15:19", "15:27", "15:35", "15:43", "15:51", "15:59", "16:06", "16:12", "16:20", "16:27", "16:35", "16:42", "16:50", "16:57", "17:05", "17:12", "17:20", "17:27", "17:35", "17:42", "17:50", "17:57", "18:05", "18:12", "18:20", "18:27", "18:35", "18:42", "18:50", "18:57", "19:05", "19:12", "19:20", "19:27", "19:35", "19:42", "19:50", "19:57", "20:05", "20:12", "20:20", "20:27", "20:37", "20:47", "20:57", "21:07", "21:17", "21:27", "21:37", "21:47", "21:57", "22:07", "22:17", "22:27", "22:37", "22:47", "22:57", "23:07", "23:17", "23:27", "23:40", "23:50", "00:05", "00:20"],'G15':["06:04", "06:14", "06:23", "06:33", "06:43", "06:53", "07:04", "07:14", "07:24", "07:34", "07:44", "07:54", "08:04", "08:14", "08:24", "08:34", "08:44", "08:54", "09:04", "09:14", "09:24", "09:34", "09:42", "09:50", "09:58", "10:06", "10:14", "10:22", "10:30", "10:38", "10:46", "10:54", "11:02", "11:10", "11:18", "11:26", "11:34", "11:42", "11:50", "11:58", "12:06", "12:14", "12:22", "12:30", "12:38", "12:46", "12:54", "13:02", "13:10", "13:18", "13:26", "13:34", "13:42", "13:50", "13:58", "14:06", "14:14", "14:22", "14:30", "14:38", "14:46", "14:54", "15:02", "15:10", "15:18", "15:26", "15:34", "15:42", "15:50", "15:57", "16:05", "16:11", "16:18", "16:26", "16:33", "16:41", "16:48", "16:56", "17:03", "17:11", "17:18", "17:26", "17:33", "17:41", "17:48", "17:56", "18:03", "18:11", "18:18", "18:26", "18:33", "18:41", "18:48", "18:56", "19:03", "19:11", "19:18", "19:26", "19:33", "19:41", "19:48", "19:56", "20:03", "20:11", "20:18", "20:26", "20:36", "20:46", "20:56", "21:06", "21:16", "21:26", "21:36", "21:46", "21:56", "22:06", "22:16", "22:26", "22:36", "22:46", "22:56", "23:06", "23:16", "23:26", "23:39", "23:49", "00:04", "00:19"],'G16':["06:02", "06:12", "06:21", "06:31", "06:41", "06:51", "07:02", "07:12", "07:22", "07:32", "07:42", "07:52", "08:02", "08:12", "08:22", "08:32", "08:42", "08:52", "09:02", "09:12", "09:22", "09:32", "09:40", "09:48", "09:56", "10:04", "10:12", "10:20", "10:28", "10:36", "10:44", "10:52", "11:00", "11:08", "11:16", "11:24", "11:32", "11:40", "11:48", "11:56", "12:04", "12:12", "12:20", "12:28", "12:36", "12:44", "12:52", "13:00", "13:08", "13:16", "13:24", "13:32", "13:40", "13:48", "13:56", "14:04", "14:12", "14:20", "14:28", "14:36", "14:44", "14:52", "15:00", "15:08", "15:16", "15:24", "15:32", "15:40", "15:48", "15:55", "16:03", "16:09", "16:16", "16:24", "16:31", "16:39", "16:46", "16:54", "17:01", "17:09", "17:16", "17:24", "17:31", "17:39", "17:46", "17:54", "18:01", "18:09", "18:16", "18:24", "18:31", "18:39", "18:46", "18:54", "19:01", "19:09", "19:16", "19:24", "19:31", "19:39", "19:46", "19:54", "20:01", "20:09", "20:16", "20:24", "20:34", "20:44", "20:54", "21:04", "21:14", "21:24", "21:34", "21:44", "21:54", "22:04", "22:14", "22:24", "22:34", "22:44", "22:54", "23:04", "23:14", "23:24", "23:37", "23:47", "00:02", "00:17"],'G17':["06:00", "06:10", "06:19", "06:29", "06:39", "06:49", "07:00", "07:10", "07:20", "07:30", "07:40", "07:50", "08:00", "08:10", "08:20", "08:30", "08:40", "08:50", "09:00", "09:10", "09:20", "09:30", "09:38", "09:46", "09:54", "10:02", "10:10", "10:18", "10:26", "10:34", "10:42", "10:50", "10:58", "11:06", "11:14", "11:22", "11:30", "11:38", "11:46", "11:54", "12:02", "12:10", "12:18", "12:26", "12:34", "12:42", "12:50", "12:58", "13:06", "13:14", "13:22", "13:30", "13:38", "13:46", "13:54", "14:02", "14:10", "14:18", "14:26", "14:34", "14:42", "14:50", "14:58", "15:06", "15:14", "15:22", "15:30", "15:38", "15:46", "15:53", "16:01", "16:07", "16:14", "16:22", "16:29", "16:37", "16:44", "16:52", "16:59", "17:07", "17:14", "17:22", "17:29", "17:37", "17:44", "17:52", "17:59", "18:07", "18:14", "18:22", "18:29", "18:37", "18:44", "18:52", "18:59", "19:07", "19:14", "19:22", "19:29", "19:37", "19:44", "19:52", "19:59", "20:07", "20:14", "20:22", "20:32", "20:42", "20:52", "21:02", "21:12", "21:22", "21:32", "21:42", "21:52", "22:02", "22:12", "22:22", "22:32", "22:42", "22:52", "23:02", "23:12", "23:22", "23:35", "23:45", "00:00", "00:15"]};
+const TT_LABELS={auto:'平日尖峰6分鐘離峰9分鐘深夜20分鐘　常態－平日　2026/01/10 上傳',W05:'平日尖峰6分鐘離峰9分鐘深夜20分鐘　常態－平日　2026/01/10 上傳',H1:'假期首日尖峰7.5分離峰8分　常態－假期首日　2026/01/10 上傳',H2:'假期其餘日離峰9.5分　常態－假期其餘日　2026/01/10 上傳'};
+let ttMode='auto',suspended=false,suspendReason='',suspendBy='',suspendUnsubscribe=null;
+
+function loadSuspendStatus(){
+  if(suspendUnsubscribe)suspendUnsubscribe();
+  suspendUnsubscribe=onSnapshot(doc(db,'systemStatus','suspend'),snap=>{
+    if(snap.exists()){
+      const d=snap.data();
+      suspended=!!d.suspended;
+      suspendReason=d.reason||'';
+      suspendBy=d.by||'';
+    } else {
+      suspended=false;suspendReason='';suspendBy='';
+    }
+    renderTTBanner();
+    renderSuspendOverlay();
+    renderSuspendBtn();
+  },e=>console.error('暫停狀態監聽失敗',e));
+}
+let ttModeUnsubscribe=null;
+function loadTTMode(){
+  if(ttModeUnsubscribe)ttModeUnsubscribe();
+  ttModeUnsubscribe=onSnapshot(doc(db,'systemStatus','ttMode'),snap=>{
+    ttMode=(snap.exists()&&snap.data().mode)?snap.data().mode:'auto';
+    renderTTBanner();
+    /* 同步更新時刻表版次頁面的下拉選單與顯示 */
+    const sel=document.getElementById('tt-sel');
+    if(sel)sel.value=ttMode;
+    const cur=document.getElementById('tt-current');
+    if(cur){
+      const isM=ttMode!=='auto';
+      const tag=isM?'<span class="tt-manual-tag">手動指定（已套用）</span>':'<span class="tt-auto-tag">自動（已套用）</span>';
+      cur.innerHTML=tag+'<span>'+(isM?(TT_LABELS[ttMode]||TT_LABELS.auto):'目前判斷結果：'+getTodayTTName())+'</span>';
+    }
+    renderEvents();/* 時刻表切換後重新計算事件迄站時間顯示 */
+  },e=>console.error('時刻表模式監聽失敗',e));
+}
+async function saveTTMode(mode){
+  try{
+    await setDoc(doc(db,'systemStatus','ttMode'),{mode,by:CU?CU.username+'·'+CU.name:'',at:new Date()});
+  }catch(e){console.error('儲存時刻表模式失敗',e);}
+}
+async function saveSuspendStatus(isSuspended,reason){
+  try{
+    await setDoc(doc(db,'systemStatus','suspend'),{
+      suspended:isSuspended,
+      reason:isSuspended?reason:'',
+      by:CU?CU.username+'·'+CU.name:'',
+      at:new Date()
+    });
+  }catch(e){console.error('儲存暫停狀態失敗',e);}
+}
+
+function autoDir(){
+  const from=document.getElementById('f-from').value;
+  const to=document.getElementById('f-to').value;
+  const dir=calcDir(from,to);
+  document.getElementById('f-dir').value=dir;
+  document.getElementById('dir-display').textContent=dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';
+  updateTrains();
+}
+
+function getTodayTTName(){
+  const t=getTodayTTType();
+  const today=new Date();
+  const k=calKey(today.getFullYear(),today.getMonth()+1,today.getDate());
+  const entry=calOvr&&calOvr[k]?calOvr[k]:(H26[k]?{type:H26[k]}:null);
+  if(t==='first')  return '假期首日尖峰7.5分離峰8分　常態－假期首日　2026/01/10 上傳';
+  if(t==='rest')   return '假期其餘日離峰9.5分　常態－假期其餘日　2026/01/10 上傳';
+  if(t==='special'&&entry&&entry.svName) return entry.svName+'　特殊版';
+  if(t==='special') return '特殊版';
+  return '平日尖峰6分鐘離峰9分鐘深夜20分鐘　常態－平日　2026/01/10 上傳';
+}
+
+function getTodayTTType(){
+  const today=new Date();
+  const k=calKey(today.getFullYear(),today.getMonth()+1,today.getDate());
+  const entry=calOvr&&calOvr[k]?calOvr[k]:(H26[k]?{type:H26[k]}:null);
+  const dow=today.getDay();
+  if(entry) return entry.type;
+  return dow===6?'first':dow===0?'rest':'weekday';
+}
+function renderTTBanner(){
+  const w=document.getElementById('tt-banner-wrap');if(!w)return;
+  if(suspended){
+    const reasonText=suspendReason?'　原因：'+suspendReason:'';
+    const byText=suspendBy?'　（由 '+suspendBy+' 設定）':'';
+    w.innerHTML='<div class="tt-banner suspended"><i class="ti ti-alert-triangle" style="font-size:15px"></i><strong>系統暫停使用中</strong><span style="font-size:12px">'+reasonText+byText+'</span></div>';
+    return;
+  }
+  const isM=ttMode!=='auto';
+  /* 決定顏色 class */
+  let bannerClass='normal';
+  if(isM){
+    if(ttMode==='H1')bannerClass='first';
+    else if(ttMode==='H2')bannerClass='rest';
+    else bannerClass='normal';
+  } else {
+    const t=getTodayTTType();
+    if(t==='first')bannerClass='first';
+    else if(t==='rest')bannerClass='rest';
+    else if(t==='special')bannerClass='special';
+    else bannerClass='normal';
+  }
+  const tagBg={normal:'#EAF3DE',first:'#FAEEDA',rest:'#EAF3DE',special:'#EEEDFE'}[bannerClass]||'#EAF3DE';
+  const tagColor={normal:'#27500A',first:'#633806',rest:'#3B6D11',special:'#3C3489'}[bannerClass]||'#27500A';
+  const modeLabel=isM?'手動指定':'自動';
+  const tag='<span style="font-size:10px;padding:2px 7px;border-radius:6px;background:'+tagBg+';color:'+tagColor+';font-weight:500">'+modeLabel+'</span>';
+  const label=isM?(TT_LABELS[ttMode]||TT_LABELS.auto):getTodayTTName();
+  w.innerHTML='<div class="tt-banner '+bannerClass+'"><i class="ti ti-calendar-check" style="font-size:14px"></i>'+tag+'<span>目前使用時刻表：'+label+'</span></div>';
+}
+function renderSuspendOverlay(){
+  const w=document.getElementById('suspend-overlay-wrap');const btn=document.getElementById('add-btn');
+  if(!w)return;
+  if(!suspended){w.innerHTML='';if(btn){btn.disabled=false;btn.style.opacity='';btn.style.cursor='';}return;}
+  const reasonLine=suspendReason?'暫停原因：<strong>'+suspendReason+'</strong><br>':'';
+  const byLine=suspendBy?'設定者：'+suspendBy+'<br>':'';
+  const restoreBtn=(CU&&(CU.role==='S'||CU.role==='A'))?'<button class="btn btn-restore btn-sm" onclick="executeRestore()"><i class="ti ti-player-play"></i> 恢復使用</button>':'';
+  w.innerHTML='<div class="suspend-overlay"><div style="font-size:28px;margin-bottom:6px">⚠️</div><div style="font-size:14px;font-weight:500;color:#791F1F;margin-bottom:4px">警告：本頁面暫停使用</div><div style="font-size:12px;color:#A32D2D;margin-bottom:12px">'+reasonLine+byLine+'進行中的任務不受影響，新增功能已停用。</div>'+restoreBtn+'</div>';
+  if(btn){btn.disabled=true;btn.style.opacity='0.4';btn.style.cursor='not-allowed';}
+}
+function renderSuspendBtn(){const w=document.getElementById('suspend-btn-area');if(!w)return;w.innerHTML=suspended?'<button class="btn btn-restore btn-sm" onclick="executeRestore()"><i class="ti ti-player-play"></i> 恢復使用</button>':'<button class="btn btn-warning btn-sm" onclick="openSuspendModal()"><i class="ti ti-player-pause"></i> 暫停本頁面使用</button>';}
+function onTTChange(){const v=document.getElementById('tt-sel').value;const cur=document.getElementById('tt-current');const tag=v==='auto'?'<span class="tt-auto-tag">自動</span>':'<span class="tt-manual-tag">手動指定</span>';cur.innerHTML=tag+'<span>'+(v==='auto'?'目前自動判斷結果：'+TT_LABELS.auto:'選擇後點套用生效')+'</span>';}
+async function applyTT(){
+  const mode=document.getElementById('tt-sel').value;
+  await saveTTMode(mode);
+  addLog('edit',mode==='auto'?'時刻表版次切換回自動判斷':'手動指定時刻表版次：'+(TT_LABELS[mode]||mode));
+  showToast(mode==='auto'?'已切換回自動判斷，所有帳號同步生效':'已手動套用時刻表版次，所有帳號同步生效');
+}
+function openSuspendModal(){document.getElementById('s-reason').value='';document.getElementById('s-other-wrap').style.display='none';document.getElementById('s-reason-err').textContent='';document.getElementById('s-other-err').textContent='';document.getElementById('modal-suspend').classList.add('open');}
+function onSReasonChange(){document.getElementById('s-other-wrap').style.display=document.getElementById('s-reason').value==='other'?'block':'none';document.getElementById('s-reason-err').textContent='';document.getElementById('s-other-err').textContent='';}
+async function executeSuspend(){const sel=document.getElementById('s-reason').value;const other=document.getElementById('s-other').value.trim();if(!sel){document.getElementById('s-reason-err').innerHTML='<i class="ti ti-alert-circle"></i> 請選擇暫停原因';return;}if(sel==='other'&&!other){document.getElementById('s-other-err').innerHTML='<i class="ti ti-alert-circle"></i> 請填寫說明';return;}const reason=sel==='other'?other:sel;ttMode='auto';document.getElementById('modal-suspend').classList.remove('open');await saveSuspendStatus(true,reason);addLog('edit','暫停系統使用：'+reason);showToast('已暫停使用（'+reason+'），所有帳號將同步看到');}
+async function executeRestore(){await saveSuspendStatus(false,'');addLog('edit','恢復系統使用');showToast('已恢復使用，時刻表自動判斷中');}
+
+/* ── 歷史查詢 ── */
+let historyData=[];
+
+async function addHistoryToDb(record){
+  try{
+    const d={...record};delete d.id;
+    d.createdAt=new Date();
+    await addDoc(collection(db,'history'),d);
+  }catch(e){console.error('寫入歷史失敗',e);}
+}
+
+async function updateHistoryInDb(id,data){
+  try{await updateDoc(doc(db,'history',id),data);}catch(e){console.error(e);}
+}
+
+async function deleteHistoryFromDb(id){
+  try{await deleteDoc(doc(db,'history',id));}catch(e){console.error(e);}
+}
+
+let historyUnsubscribe=null;
+function loadHistory(){
+  if(historyUnsubscribe)historyUnsubscribe();
+  historyUnsubscribe=onSnapshot(
+    query(collection(db,'history'),orderBy('createdAt','desc')),
+    snap=>{
+      historyData=snap.docs.map(d=>({...d.data(),id:d.id}));
+      renderHistory();
+    },
+    e=>console.error('歷史查詢監聽失敗',e)
+  );
+}
+function renderHistory(){
+  const tbody=document.getElementById('history-body');if(!tbody)return;
+  tbody.innerHTML=historyData.map(r=>`<tr>
+    <td style="width:32px"><input type="checkbox" class="hist-chk" data-id="${r.id}" style="cursor:pointer" onclick="updateHistBatchBar()"></td>
+    <td>${r.time}</td>
+    <td>${r.from}→${r.to} ${r.dir==='down'?'下行':'上行'}</td>
+    <td><span class="badge badge-blue">${r.type}</span></td>
+    <td>${r.trainGroup}</td>
+    <td><span class="badge ${r.status==='完成'?'badge-green':'badge-red'}">${r.status}</span></td>
+    <td>${r.creator}</td>
+    <td style="font-size:11px;color:var(--color-text-secondary);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.note||'—'}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-sm" onclick="openHistoryEdit('${r.id}')"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A;margin-left:3px" onclick="deleteHistory('${r.id}')"><i class="ti ti-trash"></i></button>
+    </td>
+  </tr>`).join('');
+  updateHistBatchBar();
+}
+function openHistoryEdit(id){const r=historyData.find(x=>x.id===id);if(!r)return;document.getElementById('he-id').value=id;document.getElementById('he-route-display').textContent=r.from+' '+(SN[r.from]||'')+' → '+r.to+' '+(SN[r.to]||'')+' ('+(r.dir==='down'?'下行':'上行')+') · '+r.type;document.getElementById('he-status').value=r.status;document.getElementById('he-reason').value=r.reason||'';document.getElementById('he-note').value=r.note||'';document.getElementById('he-reason-wrap').style.display=r.status==='未完成'?'flex':'none';document.getElementById('modal-history-edit').classList.add('open');}
+function saveHistoryEdit(){const id=document.getElementById('he-id').value;const r=historyData.find(x=>x.id===id);if(!r)return;r.status=document.getElementById('he-status').value;r.reason=document.getElementById('he-reason').value;r.note=document.getElementById('he-note').value;updateHistoryInDb(id,{status:r.status,reason:r.reason,note:r.note});document.getElementById('modal-history-edit').classList.remove('open');renderHistory();showToast('歷史紀錄已更新');}
+function deleteHistory(id){if(confirm('確定刪除此筆歷史紀錄？')){deleteHistoryFromDb(id);historyData=historyData.filter(x=>x.id!==id);renderHistory();showToast('已刪除');}}
+
+/* ── 歷史查詢批次操作 ── */
+function updateHistBatchBar(){
+  const ids=[...document.querySelectorAll('.hist-chk:checked')].map(el=>el.dataset.id);
+  const bar=document.getElementById('hist-batch-bar');
+  const cnt=document.getElementById('hist-batch-count');
+  if(bar)bar.style.display=ids.length?'flex':'none';
+  if(cnt)cnt.textContent='已選取 '+ids.length+' 筆';
+  const allChk=document.getElementById('hist-chk-all');
+  const total=document.querySelectorAll('.hist-chk').length;
+  if(allChk){allChk.indeterminate=ids.length>0&&ids.length<total;if(ids.length===total&&total>0)allChk.checked=true;else if(ids.length===0)allChk.checked=false;}
+}
+function toggleAllHist(cb){
+  document.querySelectorAll('.hist-chk').forEach(el=>{el.checked=cb.checked;});
+  updateHistBatchBar();
+}
+function clearHistSelection(){
+  document.querySelectorAll('.hist-chk').forEach(el=>{el.checked=false;});
+  const allChk=document.getElementById('hist-chk-all');
+  if(allChk){allChk.checked=false;allChk.indeterminate=false;}
+  updateHistBatchBar();
+}
+async function batchDeleteHistory(){
+  const ids=[...document.querySelectorAll('.hist-chk:checked')].map(el=>el.dataset.id);
+  if(!ids.length)return;
+  if(!confirm('確定刪除選取的 '+ids.length+' 筆歷史紀錄？'))return;
+  for(const id of ids){await deleteHistoryFromDb(id);}
+  historyData=historyData.filter(r=>!ids.includes(r.id));
+  renderHistory();showToast('已刪除 '+ids.length+' 筆歷史紀錄');
+}
+
+/* ── Log ── */
+const OP_L={login:'登入',create:'新增事件',edit:'編輯事件',delete:'刪除事件',export:'匯出報表',upload:'上傳時刻表',suspend:'暫停/恢復'};
+const OP_C={login:'op-login',create:'op-create',edit:'op-edit',delete:'op-delete',export:'op-export',upload:'op-upload',suspend:'op-suspend'};
+let LOGS=[];
+function nowStr2(){const n=new Date();return n.getFullYear()+'/'+(n.getMonth()+1).toString().padStart(2,'0')+'/'+n.getDate().toString().padStart(2,'0')+' '+n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0')+':'+n.getSeconds().toString().padStart(2,'0');}
+async function addLog(op,desc){
+  if(!CU)return;
+  const entry={time:nowStr2(),acc:CU.username,name:CU.name,role:CU.role,op,desc,ip:CU.ip||'—',ok:true,createdAt:new Date()};
+  try{await addDoc(collection(db,'logs'),entry);}catch(e){console.error('寫入Log失敗',e);}
+  LOGS.unshift(entry);
+  renderLog(LOGS);
+}
+async function loadLogs(){
+  try{
+    const snap=await getDocs(query(collection(db,'logs'),orderBy('createdAt','desc')));
+    LOGS=snap.docs.map(d=>({...d.data(),id:d.id}));
+    populateLogMonthOptions();
+    renderLog(LOGS);
+  }catch(e){console.error('載入Log失敗',e);}
+}
+const LOG_PAGE_SIZE=20;
+let logPage=1,logFilteredCache=[];
+
+function renderLog(data){
+  logFilteredCache=data;
+  const totalPages=Math.max(1,Math.ceil(data.length/LOG_PAGE_SIZE));
+  if(logPage>totalPages)logPage=totalPages;
+  if(logPage<1)logPage=1;
+  const startIdx=(logPage-1)*LOG_PAGE_SIZE;
+  const pageData=data.slice(startIdx,startIdx+LOG_PAGE_SIZE);
+  const rb={S:'badge-purple',A:'badge-blue',B:'badge-gray'};
+  document.getElementById('log-body').innerHTML=pageData.map(r=>`<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">${r.time}</td><td style="font-size:11px;font-weight:500">${r.acc}</td><td>${r.name}</td><td><span class="badge ${rb[r.role]||'badge-gray'}">${r.role}</span></td><td><span class="log-op-badge ${r.ok?OP_C[r.op]:'op-fail'}">${OP_L[r.op]||r.op}</span></td><td style="font-size:11px;color:var(--color-text-secondary)">${r.desc}</td><td style="font-size:11px;font-family:monospace">${r.ip}</td><td style="${r.ok?'color:#1D9E75':'color:#E24B4A'};font-size:13px">${r.ok?'✓':'✗'}</td></tr>`).join('');
+  document.getElementById('log-count').textContent='共 '+data.length+' 筆記錄'+(totalPages>1?'　第 '+logPage+' / '+totalPages+' 頁':'');
+  renderLogPagination(totalPages);
+}
+function renderLogPagination(totalPages){
+  const w=document.getElementById('log-pagination');
+  if(!w)return;
+  if(totalPages<=1){w.innerHTML='';return;}
+  let html='<button class="btn btn-sm" '+(logPage<=1?'disabled':'')+' onclick="goLogPage('+(logPage-1)+')"><i class="ti ti-chevron-left"></i></button>';
+  const pages=[];
+  for(let p=1;p<=totalPages;p++){
+    if(p===1||p===totalPages||Math.abs(p-logPage)<=1)pages.push(p);
+    else if(pages[pages.length-1]!=='…')pages.push('…');
+  }
+  pages.forEach(p=>{
+    if(p==='…'){html+='<span style="padding:0 4px;color:var(--color-text-tertiary)">…</span>';}
+    else{html+='<button class="btn btn-sm" style="'+(p===logPage?'background:#378ADD;color:#fff;border-color:#378ADD':'')+'" onclick="goLogPage('+p+')">'+p+'</button>';}
+  });
+  html+='<button class="btn btn-sm" '+(logPage>=totalPages?'disabled':'')+' onclick="goLogPage('+(logPage+1)+')"><i class="ti ti-chevron-right"></i></button>';
+  w.innerHTML=html;
+}
+function goLogPage(p){logPage=p;renderLog(logFilteredCache);}
+function populateLogMonthOptions(){
+  const sel=document.getElementById('lf-month');
+  if(!sel||sel.dataset.filled)return;
+  const months=new Set();
+  LOGS.forEach(r=>{const m=r.time&&r.time.match(/^(\d{4})\/(\d{2})/);if(m)months.add(m[1]+'/'+m[2]);});
+  [...months].sort().reverse().forEach(ym=>{
+    const[y,m]=ym.split('/');
+    const opt=document.createElement('option');
+    opt.value=ym;opt.textContent=y+' 年 '+m+' 月';
+    sel.appendChild(opt);
+  });
+  sel.dataset.filled='1';
+}
+function onLogMonthChange(){
+  const ym=document.getElementById('lf-month').value;
+  if(ym){
+    const[y,m]=ym.split('/');
+    const lastDay=new Date(parseInt(y),parseInt(m),0).getDate();
+    document.getElementById('lf-date-start').value=y+'-'+m+'-01';
+    document.getElementById('lf-date-end').value=y+'-'+m+'-'+lastDay.toString().padStart(2,'0');
+  } else {
+    document.getElementById('lf-date-start').value='';
+    document.getElementById('lf-date-end').value='';
+  }
+  logPage=1;filterLog();
+}
+function resetLogFilter(){
+  document.getElementById('lf-op').value='';
+  document.getElementById('lf-role').value='';
+  document.getElementById('lf-month').value='';
+  document.getElementById('lf-date-start').value='';
+  document.getElementById('lf-date-end').value='';
+  logPage=1;filterLog();
+}
+function filterLog(){
+  const op=document.getElementById('lf-op').value,role=document.getElementById('lf-role').value;
+  const dateStart=document.getElementById('lf-date-start').value;
+  const dateEnd=document.getElementById('lf-date-end').value;
+  logPage=1;
+  const filtered=LOGS.filter(r=>{
+    if(op&&r.op!==op)return false;
+    if(role&&r.role!==role)return false;
+    if(dateStart||dateEnd){
+      const m=r.time&&r.time.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+      if(!m)return false;
+      const rDate=m[1]+'-'+m[2]+'-'+m[3];
+      if(dateStart&&rDate<dateStart)return false;
+      if(dateEnd&&rDate>dateEnd)return false;
+    }
+    return true;
+  });
+  renderLog(filtered);
+}
+
+/* ── 匯出工具 ── */
+function csvEscape(v){const s=String(v===null||v===undefined?'':v);return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;}
+function downloadCsv(filename,rows,headers){
+  const bom='\uFEFF';/* BOM 讓 Excel 正確辨識 UTF-8 中文 */
+  const csv=bom+[headers,...rows].map(r=>r.map(csvEscape).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=filename;a.click();URL.revokeObjectURL(a.href);
+}
+function exportLog(){
+  const filtered=logFilteredCache.length?logFilteredCache:LOGS;
+  if(!filtered.length){showToast('目前沒有符合條件的記錄');return;}
+  const headers=['時間','帳號','姓名','層級','操作','內容','IP','結果'];
+  const rows=filtered.map(r=>[r.time,r.acc,r.name,r.role,r.op,r.desc,r.ip||'—',r.ok?'成功':'失敗']);
+  const now=new Date();
+  downloadCsv('操作記錄_'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'.csv',rows,headers);
+  addLog('export','匯出操作記錄（'+filtered.length+'筆）');
+  showToast('匯出完成（'+filtered.length+'筆）');
+}
+function exportCustomReport(){
+  const start=document.getElementById('report-start').value;
+  const end=document.getElementById('report-end').value;
+  if(!start||!end){showToast('請選擇開始和結束日期');return;}
+  const s=new Date(start);const e=new Date(end);e.setHours(23,59,59,999);
+  const filtered=historyData.filter(r=>{
+    if(!r.time)return false;
+    /* time 格式 MM/DD HH:mm，補上今年 */
+    const parts=r.time.match(/(\d+)\/(\d+)\s+(\d+):(\d+)/);
+    if(!parts)return false;
+    const d=new Date(new Date().getFullYear(),parseInt(parts[1])-1,parseInt(parts[2]),parseInt(parts[3]),parseInt(parts[4]));
+    return d>=s&&d<=e;
+  });
+  if(!filtered.length){showToast('選定區間內沒有歷史記錄');return;}
+  const headers=['時間','路線','方向','類別','車組','狀態','建立者','備註','原因'];
+  const rows=filtered.map(r=>[r.time,r.from+'→'+r.to,r.dir==='down'?'下行':'上行',r.type,r.trainGroup||'—',r.status,r.creator,r.note||'',r.reason||'']);
+  downloadCsv('歷史報表_'+start+'_'+end+'.csv',rows,headers);
+  addLog('export','匯出自訂區間報表（'+start+'~'+end+'，'+filtered.length+'筆）');
+  showToast('匯出完成（'+filtered.length+'筆）');
+}
+function exportMonthReport(){
+  const now=new Date();
+  const y=now.getFullYear();const m=now.getMonth();/* 上個月 */
+  const targetY=m===0?y-1:y;const targetM=m===0?12:m;
+  const filtered=historyData.filter(r=>{
+    if(!r.time)return false;
+    const parts=r.time.match(/(\d+)\/(\d+)/);
+    if(!parts)return false;
+    return parseInt(parts[1])===targetM;
+  });
+  const headers=['時間','路線','方向','類別','車組','狀態','建立者','備註','原因'];
+  const rows=filtered.map(r=>[r.time,r.from+'→'+r.to,r.dir==='down'?'下行':'上行',r.type,r.trainGroup||'—',r.status,r.creator,r.note||'',r.reason||'']);
+  downloadCsv(targetY+'年'+targetM+'月報表.csv',rows,headers);
+  addLog('export','匯出'+targetM+'月份月報（'+filtered.length+'筆）');
+  showToast('已匯出 '+targetM+' 月份月報（'+filtered.length+'筆）');
+}
+
+/* ── 語音通知（新增事件通知迄站） ── */
+/* ── 通知型事件輔助 ── */
+function isNotifyEvent(type){return NOTIFY_TYPES.includes(type);}
+function isBikeEvent(type){return type==='自行車旅客';}
+function getIntermediateStations(from,to){
+  const fi=STATION_ORDER_LIST.indexOf(from);
+  const ti=STATION_ORDER_LIST.indexOf(to);
+  if(fi<0||ti<0)return[];
+  const s=Math.min(fi,ti),e=Math.max(fi,ti);
+  return STATION_ORDER_LIST.slice(s+1,e);
+}
+function onTypeChange(){
+  const t=(document.getElementById('f-type')||{}).value||'';
+  const w=document.getElementById('bike-count-wrap');
+  const gate=document.getElementById('f-gate');
+  const gender=document.getElementById('f-gender');
+  const fFrom=document.getElementById('f-from');
+  const fTo=document.getElementById('f-to');
+  const isNotifyType=t==='自行車旅客'||t==='團體旅客';
+  const isBikeType=t==='自行車旅客';
+  if(w)w.style.display=isBikeType?'block':'none';
+  /* 自行車旅客固定使用 02/09 車門，停用一般車門選擇 */
+  if(gate){
+    gate.disabled=isBikeType;
+    gate.style.opacity=isBikeType?'0.35':'1';
+    gate.style.cursor=isBikeType?'not-allowed':'';
+  }
+  /* 自行車/團體旅客性別非必填，預設清空並停用 */
+  if(gender){
+    if(isNotifyType){gender.value='';gender.disabled=true;gender.style.opacity='0.35';gender.style.cursor='not-allowed';}
+    else{gender.disabled=false;gender.style.opacity='1';gender.style.cursor='';if(!gender.value)gender.value='男性';}
+  }
+  /* G17 自行車旅客限制：公司規定，高鐵臺中站禁止作為自行車起訖站 */
+  if(fFrom){
+    const g17From=fFrom.querySelector('option[value="G17"]');
+    if(g17From){
+      g17From.disabled=isBikeType;
+      if(isBikeType&&fFrom.value==='G17'){fFrom.value='G0';autoDir();}
+    }
+  }
+  if(fTo){
+    const g17To=fTo.querySelector('option[value="G17"]');
+    if(g17To){
+      g17To.disabled=isBikeType;
+      if(isBikeType&&fTo.value==='G17'){fTo.value='G0';updateTrains();}
+    }
+  }
+  /* 若本站為 G17，整站禁止新增自行車旅客事件（公司規定：G17 無法作為起訖站） */
+  if(isBikeType&&CU&&CU.station==='G17'){
+    showToast('G17 高鐵臺中站依公司規定無法使用自行車旅客功能');
+    document.getElementById('f-type').value='視障旅客';
+    if(w)w.style.display='none';
+    if(gender){gender.disabled=false;gender.style.opacity='1';gender.style.cursor='';if(!gender.value)gender.value='男性';}
+    if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';}
+    return;
+  }
+  if(isBikeType) updateBikeCapacity();
+  else{const ci=document.getElementById('bike-cap-info');if(ci)ci.style.display='none';}
+}
+function updateBikeCapacity(){
+  if(!document.getElementById('f-type')||document.getElementById('f-type').value!=='自行車旅客')return;
+  const editId=(document.getElementById('f-edit-id')||{}).value||'';
+  const b2=document.getElementById('f-bike2'),b9=document.getElementById('f-bike9');
+  const ci=document.getElementById('bike-cap-info');
+  if(!b2||!b9)return;
+  const sel=document.querySelector('input[name="tsel"]:checked');
+  if(!sel){
+    [...b2.options].forEach(o=>o.disabled=false);
+    [...b9.options].forEach(o=>o.disabled=false);
+    if(ci)ci.style.display='none';
+    return;
+  }
+  const selTime=new Date(sel.value).getTime();
+  const dir=(document.getElementById('f-dir')||{}).value||'down';
+  const selArrival=sel.dataset.arr||''; /* 所選班次抵達迄站的時間 */
+  const selTo=document.getElementById('f-to').value||'';
+  /* 同班次判斷：優先用「迄站相同 + 到站時間相同」（不同起站但同一班車的情境）
+     若缺乏資料則回退到起站發車時間 ±5 分鐘 */
+  const sameTrain=events.filter(ev=>{
+    if(ev.id===editId)return false;
+    if(ev.type!=='自行車旅客')return false;
+    if(ev.dir!==dir)return false;
+    if(selArrival&&selTo&&ev.arrivalTimeStr&&ev.to){
+      return ev.to===selTo&&ev.arrivalTimeStr===selArrival;
+    }
+    return Math.abs(ev.departTime.getTime()-selTime)<300000;
+  });
+  const usedD2=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor2||0),0);
+  const usedD9=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor9||0),0);
+  const maxD2=Math.max(0,2-usedD2),maxD9=Math.max(0,2-usedD9);
+  /* 更新選項：超出上限者 disabled */
+  [...b2.options].forEach(o=>{
+    const v=parseInt(o.value);o.disabled=v>maxD2;
+    if(v>maxD2&&parseInt(b2.value)>maxD2)b2.value=String(maxD2);
+  });
+  [...b9.options].forEach(o=>{
+    const v=parseInt(o.value);o.disabled=v>maxD9;
+    if(v>maxD9&&parseInt(b9.value)>maxD9)b9.value=String(maxD9);
+  });
+  /* 容量提示 */
+  if(ci){
+    const total=usedD2+usedD9;
+    const isFull=total>=4;
+    if(total>0){
+      ci.style.display='block';
+      ci.style.borderLeftColor=isFull?'#E24B4A':'#E8861A';
+      ci.style.background=isFull?'#FCEBEB':'#FEF4D6';
+      ci.innerHTML='<i class="ti ti-alert-circle" style="color:'+(isFull?'#E24B4A':'#E8861A')+';font-size:12px"></i> '+
+        (isFull?'<strong>此班列車自行車已額滿（4台），無法繼續新增</strong>':'同班次已登記 '+total+' 台自行車')+
+        '<br><span style="color:var(--color-text-secondary)">02車門已登記 '+usedD2+' 台（剩餘 '+maxD2+' 台）／ 09車門已登記 '+usedD9+' 台（剩餘 '+maxD9+' 台）</span>';
+    } else {
+      ci.style.display='none';
+    }
+  }
+}
+function speakTTS3x(msg,vol){
+  if(!window.speechSynthesis)return;
+  let count=0;
+  function doSpeak(){
+    if(count>=3)return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(msg);
+    u.lang='zh-TW';u.rate=0.9;u.volume=Math.min(1,Math.max(0,vol));
+    const vcs=window.speechSynthesis.getVoices();
+    const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));
+    if(pv)u.voice=pv;
+    u.onend=()=>{count++;setTimeout(doSpeak,700);};
+    window.speechSynthesis.speak(u);
+  }
+  doSpeak();
+}
+function speakBikeArriveNotice(){speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱紙',SC.bike_arrive.vol/100);}
+function speakBikeTransitNotice(){speakTTS3x('自行車旅客搭乘列車途經本站，車票販售前請注意自行車數量',SC.bike_transit.vol/100);}
+function speakGroupArriveNotice(){speakTTS3x('有團體旅客將於本站下車，請準備回收感熱紙',SC.group_arrive.vol/100);}
+function speakBikeNotify(){speakTTS3x('您有一則自行車旅客搭乘通知',SC.bike_notify.vol/100);}
+function speakGroupNotify(){speakTTS3x('您有一則團體旅客搭乘通知',SC.group_notify.vol/100);}
+
+function renderTransitBanner(){
+  const wrap=document.getElementById('transit-banner-wrap');if(!wrap||!CU)return;
+  const myStation=CU.station;
+  const now=new Date();
+  const transitEvs=events.filter(ev=>{
+    if(ev.type!=='自行車旅客')return false;
+    if(!getIntermediateStations(ev.from,ev.to).includes(myStation))return false;
+    /* 計算列車途經本站的預計時間，若已通過則自動隱藏 */
+    const meTimeStr=getArrivalTime(ev.from,ev.departTimeStr||'',myStation,ev.dir||'down');
+    if(meTimeStr){
+      const[h,m]=meTimeStr.split(':').map(Number);
+      const meTime=new Date(ev.departTime);
+      meTime.setHours(h<5?h+24:h,m,0,0);
+      if(h<5&&meTime<ev.departTime)meTime.setDate(meTime.getDate()+1);
+      if(now>=meTime)return false;/* 已途經，不顯示 */
+    }
+    return true;
+  });
+  if(!transitEvs.length){wrap.innerHTML='';wrap.style.display='none';return;}
+  wrap.style.display='flex';
+  wrap.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
+  wrap.innerHTML=transitEvs.sort((a,b)=>a.departTime-b.departTime).map(ev=>{
+    const total=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
+    /* 同班次所有自行車事件累計（同迄站＋同到站時間＋同方向） */
+    const trainTotal=events.filter(e=>e.type==='自行車旅客'&&e.to===ev.to&&e.arrivalTimeStr===ev.arrivalTimeStr&&e.dir===ev.dir).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0);
+    const remain=Math.max(0,4-trainTotal);
+    const timeStr=ev.arrivalTimeStr||fmt(ev.departTime);
+    return '<div style="display:flex;align-items:center;gap:8px;background:#E0F3F7;border:1px dashed #9AD8E8;border-radius:8px;padding:8px 14px;font-size:12px">'+
+      '<span style="font-size:14px">🚲</span>'+
+      '<span style="color:#0E667A;font-weight:600">途經提醒</span>'+
+      '<span style="color:#0E667A">'+SN[ev.from]+' → '+SN[ev.to]+'</span>'+
+      '<span style="color:var(--color-text-secondary)">'+timeStr+'</span>'+
+      '<span style="background:#fff;border:1px solid #9AD8E8;border-radius:4px;padding:1px 8px;color:#0E667A;font-weight:600">本次 02車門: '+(ev.bikeDoor2||0)+'台 ／ 09車門: '+(ev.bikeDoor9||0)+'台</span>'+
+      '<span style="color:'+(remain>0?'#1D9E75':'#E24B4A')+';font-weight:600">同班累計 '+trainTotal+' 台 · 剩餘 '+remain+' 台</span>'+
+    '</div>';
+  }).join('');
+}
+
+function finishNotifyOk(id){
+  const ev=events.find(e=>e.id===id);
+  if(ev){
+    const now=new Date();
+    const mm=(now.getMonth()+1).toString().padStart(2,'0'),dd=now.getDate().toString().padStart(2,'0');
+    const hh=now.getHours().toString().padStart(2,'0'),mi=now.getMinutes().toString().padStart(2,'0');
+    addHistoryToDb({time:mm+'/'+dd+' '+hh+':'+mi,from:ev.from,to:ev.to,dir:ev.dir,type:ev.type,trainGroup:ev.trainGroup||'—',status:'完成',creator:ev.createdBy||'—',note:ev.note||'',reason:''});
+    addLog('edit','通知結案（已回收）'+ev.from+'→'+ev.to+' '+ev.type);
+    deleteEventFromDb(ev.id);
+    setTimeout(loadHistory,1000);
+  }
+  closeAlertCard(id);
+}
+
+function speakArrivalNotice(){
+  speakArrivalNoticeVol(SC.notify.vol/100);
+}
+
+/* ── 音效 ── */
+let audioCtx=null;
+function ga(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function bip(a,f,dur,t,v){const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime((v||0.7)*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+dur);o.start(a.currentTime+t);o.stop(a.currentTime+t+dur+0.01);}
+const PRESETS={warn:[{id:'w1',name:'雙嗶提示',tag:'輕柔',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w2',name:'三連嗶',tag:'清晰',fn:(v)=>{const a=ga();[[1000,0],[1000,0.2],[1000,0.4]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},{id:'w3',name:'上升嗶嗶',tag:'明顯',fn:(v)=>{const a=ga();[[800,0],[1000,0.22]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},{id:'w4',name:'鐘聲單音',tag:'悠揚',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=987;g.gain.setValueAtTime(v*0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);o.start();o.stop(a.currentTime+1.3);}},{id:'w5',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'w6',name:'電子嗶聲',tag:'俐落',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='square';o.connect(g);g.connect(a.destination);o.frequency.value=750;g.gain.setValueAtTime(v*0.12,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+0.12);o.start();o.stop(a.currentTime+0.13);}}],danger:[{id:'dv1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakDangerOnce(v);}},{id:'d1',name:'急促雙音',tag:'緊急感',fn:(v)=>{const a=ga();[[1200,0],[900,0.15],[1200,0.3],[900,0.45]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},{id:'d2',name:'警報上升',tag:'強烈',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(800,a.currentTime);o.frequency.linearRampToValueAtTime(1400,a.currentTime+0.4);g.gain.setValueAtTime(v*0.28,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);o.start();o.stop(a.currentTime+0.5);}},{id:'d3',name:'快速三連',tag:'急促',fn:(v)=>{const a=ga();[[1100,0],[1100,0.13],[1100,0.26]].forEach(([f,t])=>bip(a,f,0.1,t,v));}},{id:'d4',name:'警笛短音',tag:'警示',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(1000,a.currentTime);o.frequency.setValueAtTime(1300,a.currentTime+0.1);o.frequency.setValueAtTime(1000,a.currentTime+0.2);g.gain.setValueAtTime(v*0.18,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.35);o.start();o.stop(a.currentTime+0.4);}},{id:'d5',name:'緊急嗶鳴',tag:'穿透',fn:(v)=>{const a=ga();[[1400,0],[1400,0.1],[1400,0.2],[1400,0.3]].forEach(([f,t])=>bip(a,f,0.07,t,v));}},{id:'d6',name:'雙頻交替',tag:'識別高',fn:(v)=>{const a=ga();[[900,0],[1300,0.18],[900,0.36],[1300,0.54]].forEach(([f,t])=>bip(a,f,0.14,t,v));}}],
+  thirty:[
+    {id:'t1',name:'單嗶提示',tag:'預設',fn:(v)=>{const a=ga();bip(a,1000,0.22,0,v);}},
+    {id:'t2',name:'快速雙嗶',tag:'清脆',fn:(v)=>{const a=ga();[[1000,0],[1200,0.15]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
+    {id:'t3',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}},
+    {id:'tv1',name:'語音播報',tag:'語音',fn:(v)=>{speakTTS3x('時間差不多囉，請確認人員就位',v);}}
+  ],
+  success:[{id:'s1',name:'上升音階',tag:'歡樂',fn:(v)=>{const a=ga();[[523,0],[659,0.15],[784,0.3],[1047,0.45]].forEach(([f,t])=>bip(a,f,0.2,t,v));}},{id:'s2',name:'叮咚完成',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.2]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.28,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.6);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.7);});}},{id:'s3',name:'三音完成',tag:'溫和',fn:(v)=>{const a=ga();[[659,0],[784,0.18],[987,0.36]].forEach(([f,t])=>bip(a,f,0.22,t,v));}},{id:'s4',name:'五音樂句',tag:'豐富',fn:(v)=>{const a=ga();[[523,0],[587,0.14],[659,0.28],[784,0.42],[1047,0.56]].forEach(([f,t])=>bip(a,f,0.16,t,v));}},{id:'s5',name:'電玩過關',tag:'活潑',fn:(v)=>{const a=ga();[[784,0],[784,0.1],[784,0.2],[659,0.3],[784,0.4]].forEach(([f,t])=>bip(a,f,0.09,t,v));}},{id:'s6',name:'柔和鐘聲',tag:'優雅',fn:(v)=>{const a=ga();[[523,0],[659,0.2],[783,0.4]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.8);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.9);});}},],
+  notify:[
+    {id:'n1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則旅客引導訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}},
+    {id:'n2',name:'單嗶提示音',tag:'簡短',fn:(v)=>{const a=ga();const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.setValueAtTime(v*0.25,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.start();o.stop(a.currentTime+0.45);}},
+    {id:'n3',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}}
+  ],
+  chat:[
+    {id:'c1',name:'輕快雙音',tag:'預設',fn:(v)=>{const a=ga();[[700,0],[950,0.16]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},
+    {id:'c2',name:'氣泡音',tag:'柔和',fn:(v)=>{const a=ga(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.setValueAtTime(600,a.currentTime);o.frequency.exponentialRampToValueAtTime(900,a.currentTime+0.15);g.gain.setValueAtTime(v*0.2,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.3);o.start();o.stop(a.currentTime+0.35);}},
+    {id:'c3',name:'語音播報',tag:'語音',fn:(v)=>{if(window.speechSynthesis){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('您有一則新的對話訊息');u.lang='zh-TW';u.rate=1;u.volume=v;const vcs=window.speechSynthesis.getVoices();const pv=vcs.find(x=>/zh.*TW|Google.*TW|cmn-TW/i.test(x.lang+x.name));if(pv)u.voice=pv;window.speechSynthesis.speak(u);}}}
+  ],
+  bike_arrive:[
+    {id:'ba_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有自行車旅客將於本站下車，請準備回收感熱紙',v);}},
+    {id:'ba_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
+    {id:'ba_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ],
+  bike_transit:[
+    {id:'bt_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('自行車旅客搭乘列車途經本站，車票販售前請注意自行車數量',v);}},
+    {id:'bt_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[700,0],[700,0.2]].forEach(([f,t])=>bip(a,f,0.15,t,v));}},
+    {id:'bt_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ],
+  group_arrive:[
+    {id:'ga_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('有團體旅客將於本站下車，請準備回收感熱紙',v);}},
+    {id:'ga_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
+    {id:'ga_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ],
+  bike_notify:[
+    {id:'bn_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('您有一則自行車旅客搭乘通知',v);}},
+    {id:'bn_1',name:'雙嗶提示',tag:'提示',fn:(v)=>{const a=ga();[[880,0],[880,0.25]].forEach(([f,t])=>bip(a,f,0.18,t,v));}},
+    {id:'bn_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ],
+  group_notify:[
+    {id:'gn_v1',name:'語音播報（預設）',tag:'語音',fn:(v)=>{speakTTS3x('您有一則團體旅客搭乘通知',v);}},
+    {id:'gn_1',name:'雙音提示',tag:'清脆',fn:(v)=>{const a=ga();[[880,0],[1100,0.25]].forEach(([f,t])=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.connect(g);g.connect(a.destination);o.frequency.value=f;g.gain.setValueAtTime(v*0.22,a.currentTime+t);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+t+0.5);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.55);})}},
+    {id:'gn_2',name:'廣播提示音',tag:'廣播感',fn:(v)=>{const a=ga();[[440,0],[554,0.15],[659,0.3]].forEach(([f,t])=>bip(a,f,0.12,t,v));}}
+  ]};
+
+/* ══ 音效設定（新版） ══ */
+const SOUND_SECTIONS_CFG=[
+  {k:'warn',   icon:'⚠️', label:'準備就緒提醒音（3分鐘警示）', desc:'倒數達3分鐘時觸發，循環直到確認'},
+  {k:'danger', icon:'🚨', label:'緊急確認語音提示音（1分30秒警示）', desc:'倒數達90秒時觸發，循環直到確認（語音：引導旅客即將到站，請確認人員是否就定位）'},
+  {k:'thirty', icon:'⏱️', label:'時間差不多囉提醒音（30秒警示）', desc:'倒數達30秒時觸發，僅播放一次'},
+  {k:'success',icon:'✅', label:'到站完成音',                  desc:'列車抵達時觸發，重複播放直到按下確認'},
+  {k:'notify', icon:'📢', label:'收到引導訊息提醒音',           desc:'其他站新增引導事件、本站為迄站時觸發（語音播報3次）'},
+  {k:'chat',   icon:'💬', label:'收到對話訊息提醒音',           desc:'對話牆收到新訊息時觸發'},
+  {k:'bike_arrive',  icon:'🚲', label:'自行車旅客到站提醒音',        desc:'自行車旅客抵達時觸發，（語音播報3次）'},
+  {k:'bike_transit', icon:'🚴', label:'自行車旅客途經本站提醒音',    desc:'其他站新增自行車旅客事件、本站為途經站時觸發（語音播報3次）'},
+  {k:'group_arrive', icon:'👥', label:'團體旅客到站提醒音',          desc:'團體旅客抵達時觸發，（語音播報3次）'},
+  {k:'bike_notify',  icon:'🔔', label:'收到自行車旅客訊息提醒音',   desc:'其他站新增自行車旅客事件、本站為迄站時觸發（語音播報3次）'},
+  {k:'group_notify', icon:'🔔', label:'收到團體旅客訊息提醒音',     desc:'其他站新增團體旅客事件、本站為迄站時觸發（語音播報3次）'},
+];
+const SOUND_DEFAULTS={
+  warn:   {type:'preset',id:'w1',name:'雙嗶提示'},
+  danger: {type:'voice', id:'dv1',name:'語音播報'},
+  thirty: {type:'preset',id:'t1',name:'單嗶提示'},
+  success:{type:'preset',id:'s1',name:'上升音階'},
+  notify: {type:'voice', id:'v1',name:'語音播報'},
+  chat:   {type:'preset',id:'c1',name:'輕快雙音'},
+  bike_arrive:  {type:'voice',id:'ba_v1',name:'語音播報'},
+  bike_transit: {type:'voice',id:'bt_v1',name:'語音播報'},
+  group_arrive: {type:'voice',id:'ga_v1',name:'語音播報'},
+  bike_notify:  {type:'voice',id:'bn_v1',name:'語音播報'},
+  group_notify: {type:'voice',id:'gn_v1',name:'語音播報'},
+};
+const SC={
+  warn:   {current:{type:'preset',id:'w1',name:'雙嗶提示'},   vol:70},
+  danger: {current:{type:'voice', id:'dv1',name:'語音播報'},  vol:80},
+  thirty: {current:{type:'preset',id:'t1',name:'單嗶提示'},   vol:100},
+  success:{current:{type:'preset',id:'s1',name:'上升音階'},   vol:70},
+  notify: {current:{type:'voice', id:'v1',name:'語音播報'},   vol:80},
+  chat:   {current:{type:'preset',id:'c1',name:'輕快雙音'},   vol:70},
+  bike_arrive:  {current:{type:'voice',id:'ba_v1',name:'語音播報'},vol:80},
+  bike_transit: {current:{type:'voice',id:'bt_v1',name:'語音播報'},vol:80},
+  group_arrive: {current:{type:'voice',id:'ga_v1',name:'語音播報'},vol:80},
+  bike_notify:  {current:{type:'voice',id:'bn_v1',name:'語音播報'},vol:80},
+  group_notify: {current:{type:'voice',id:'gn_v1',name:'語音播報'},vol:80},
+};
+let soundReplaceKey=null,soundReplaceSel=null,soundReplaceFile=null;
+let soundPlayingId=null,soundPlayInterval=null;
+
+function buildSound(){
+  const cards=document.getElementById('sound-cards');if(!cards)return;
+  cards.innerHTML=SOUND_SECTIONS_CFG.map(s=>`
+    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:36px;height:36px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--color-background-secondary);flex-shrink:0">${s.icon}</div>
+        <div><div style="font-size:13px;font-weight:500;color:var(--color-text-primary)">${s.label}</div><div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">${s.desc}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 13px;margin-bottom:10px" id="scur-${s.k}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <i class="${s.k==='notify'?'ti ti-speakerphone':'ti ti-music'}" style="font-size:14px;color:var(--color-text-tertiary)"></i>
+          <span style="font-size:12px;font-weight:500;color:var(--color-text-primary)" id="scur-name-${s.k}">${SC[s.k].current.name}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:var(--border-radius-md);background:${SC[s.k].current.type==='voice'?'#e6f1fb':SC[s.k].current.type==='custom'?'#EEEDFE':'#EAF3DE'};color:${SC[s.k].current.type==='voice'?'#0c447c':SC[s.k].current.type==='custom'?'#3C3489':'#3B6D11'};font-weight:500" id="scur-tag-${s.k}">${SC[s.k].current.type==='voice'?'語音':SC[s.k].current.type==='custom'?'自訂':'內建'}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm" onclick="playCurrentSoundCS('${s.k}')"><i class="ti ti-volume"></i> 試聽</button>
+          <button class="btn btn-sm" onclick="openSoundReplace('${s.k}')"><i class="ti ti-refresh"></i> 替換</button>
+          <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" onclick="resetSoundCS('${s.k}')"><i class="ti ti-trash"></i> 恢復預設</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:var(--color-text-secondary);white-space:nowrap;display:flex;align-items:center;gap:4px"><i class="ti ti-volume" style="font-size:14px"></i> 音量</span>
+        <input type="range" min="0" max="100" value="${SC[s.k].vol}" id="svol-${s.k}" oninput="updateSoundVol('${s.k}',this.value)" style="flex:1;accent-color:#378ADD">
+        <span style="font-size:12px;font-weight:500;min-width:32px;text-align:right" id="svol-lbl-${s.k}">${SC[s.k].vol}%</span>
+      </div>
+    </div>`).join('');
+}
+
+function refreshSoundCurrent(k){
+  const n=document.getElementById('scur-name-'+k);const t=document.getElementById('scur-tag-'+k);
+  if(n)n.textContent=SC[k].current.name;
+  const isCustom=SC[k].current.type==='custom';
+  const isVoice=SC[k].current.type==='voice';
+  if(t){t.textContent=isCustom?'自訂':isVoice?'語音':'內建';t.style.background=isCustom?'#EEEDFE':isVoice?'#e6f1fb':'#EAF3DE';t.style.color=isCustom?'#3C3489':isVoice?'#0c447c':'#3B6D11';}
+}
+async function resetSoundCS(k){
+  SC[k].current={...SOUND_DEFAULTS[k]};
+  if(k!=='notify')refreshSoundCurrent(k);else buildSound();
+  await saveAllSound(true);
+  showToast('已恢復預設音效　（已自動儲存）');
+}
+function updateSoundVol(k,val){
+  SC[k].vol=parseInt(val);
+  const lb=document.getElementById('svol-lbl-'+k);
+  if(lb)lb.textContent=val+'%';
+}
+
+async function saveAllSound(silent){
+  if(!CU)return;
+  const data={
+    warn:        {id:SC.warn.current.id,        type:SC.warn.current.type,        name:SC.warn.current.name,        vol:SC.warn.vol},
+    danger:      {id:SC.danger.current.id,       type:SC.danger.current.type,      name:SC.danger.current.name,      vol:SC.danger.vol},
+    thirty:      {id:SC.thirty.current.id,       type:SC.thirty.current.type,      name:SC.thirty.current.name,      vol:SC.thirty.vol},
+    success:     {id:SC.success.current.id,      type:SC.success.current.type,     name:SC.success.current.name,     vol:SC.success.vol},
+    notify:      {id:SC.notify.current.id,       type:SC.notify.current.type,      name:SC.notify.current.name,      vol:SC.notify.vol},
+    chat:        {id:SC.chat.current.id,         type:SC.chat.current.type,        name:SC.chat.current.name,        vol:SC.chat.vol},
+    bike_arrive: {id:SC.bike_arrive.current.id,  type:SC.bike_arrive.current.type, name:SC.bike_arrive.current.name, vol:SC.bike_arrive.vol},
+    bike_transit:{id:SC.bike_transit.current.id, type:SC.bike_transit.current.type,name:SC.bike_transit.current.name,vol:SC.bike_transit.vol},
+    group_arrive:{id:SC.group_arrive.current.id, type:SC.group_arrive.current.type,name:SC.group_arrive.current.name,vol:SC.group_arrive.vol},
+    bike_notify: {id:SC.bike_notify.current.id,  type:SC.bike_notify.current.type, name:SC.bike_notify.current.name, vol:SC.bike_notify.vol},
+    group_notify:{id:SC.group_notify.current.id, type:SC.group_notify.current.type,name:SC.group_notify.current.name,vol:SC.group_notify.vol},
+    by:CU.username+'·'+CU.name,
+    at:new Date(),
+  };
+  try{
+    await setDoc(doc(db,'soundSettings','global'),data);
+    addLog('edit','更新全域音效設定');
+    if(!silent)showToast('音效設定已儲存，全系統同步生效');
+  }catch(e){showToast('儲存失敗：'+e.message);}
+}
+
+/* ══════════ 對話牆功能 ══════════ */
+const EMOJI_TABS={
+  emoji:['😀','😃','😄','😁','😆','😅','😂','🤣','🙂','🙃','😉','😊','😇','😍','🥰','😘','😋','😜','🤪','😎',
+         '🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬',
+         '🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😴',
+         '🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','💀','👻','🤖','🎃','😺',
+         '🙏','👍','👎','👌','✌️','🤞','🤟','🤘','👊','✊','👏','🙌','👐','🤲','🤝','💪','🦾','🖐️','✋','👋',
+         '🤚','👆','👇','👉','👈','🖕','🤙','👀','👁️','👅','👄','🚶','🏃','🦽','🦼','🧍','🧎','🚇','🚊','🚉',
+         '🚏','🚌','🚍','🚄','🚆','🚝','🚞','🛤️','🚦','🚥','🚧','🚨','🚓','🚑','🚒','🚐','🚕','🚗','🛗','🪜',
+         '⏰','⏱️','⏲️','⌛','⏳','🕐','📍','📌','🗺️','🧭','🔔','🔕','📢','📣','📯','📡','💬','💭','🗯️','💡',
+         '⚠️','❗','❓','❕','❔','✅','❌','⭕','🆗','🆘','🚫','⛔','🔴','🟠','🟡','🟢','🔵','🟣','⚪','⚫',
+         '🌧️','⛈️','🌩️','🌪️','🌀','🌤️','☀️','☁️','💨','🌈','❄️','☔','⚡','🔥','💧','🌊','🌍','🗻','🏢','🏪'],
+  kaomoji1:['(^_^)','(≧▽≦)','(╯︵╰,)','(´；ω；｀)','(>_<)','(T_T)','(つД`)','(；ﾟДﾟ)','(￣▽￣)','(・∀・)',
+            '(°∀°)ﾉ','(ノ´∀｀*)','(╬ Ò ‸ Ó)','(｀∀´)Ψ','(¬_¬)','(￣ω￣)','(o_O)','(・_・;)','(^人^)','(づ￣ ³￣)づ'],
+  kaomoji2:['ヽ(°〇°)ﾉ','orz','m(_ _)m','(*≧ω≦)','(ノД`)','(╥﹏╥)','(ʘ‿ʘ)','(¬‿¬)','(•̥́ ▃ •̀")','(ง •̀_•́)ง',
+            '٩(◕‿◕｡)۶','(づ｡◕‿‿◕｡)づ','(ノ_<)','(；一_一)','ヾ(•ω•`)o','(╯°□°)╯','(°ロ°) !','(¬､¬)','(ノ°益°)ノ','(´∀｀)'],
+  kaomoji3:['☆⌒(*^-゜)v','(*￣3￣)','(｀皿´)','(；´д｀)ゞ','(＠_＠;)','(´-｀).｡oO','(눈_눈)','(ㆆ_ㆆ)','(•‿•)','(¬‿¬)',
+            'ヽ(´▽`)/','(*＞ω＜*)','(；´∀｀)','(╬◣д◢)','(´;ω;`)','(*ﾐ´∀｀)','(￣^￣)','(•́へ•̀)','┐(´д｀)┌','(＞﹏＜)']
+};
+const EMOJI_TAB_LABELS={emoji:'表情符號',kaomoji1:'顏文字 1',kaomoji2:'顏文字 2',kaomoji3:'顏文字 3'};
+let activeEmojiTab='emoji';
+let chatMessages=[],chatUnsubscribe=null,chatTargetMode=null,chatTargetStations=[],chatWallCollapsed=false,chatKnownIds=new Set(),chatInitialized=false;
+
+const CHAT_STATION_OPTIONS=[
+  {code:'北段辦',name:'北段辦（管理單位）'},{code:'南段辦',name:'南段辦（管理單位）'},
+  ...Object.entries(SN).map(([code,name])=>({code,name:code+' '+name}))
+];
+
+function canSeeChatMsg(msg){
+  if(!CU)return false;
+  if(CU.role==='S')return true;/* S級可在管理頁查全部，但對話牆本身仍依規則顯示 */
+  if(msg.to==='all'||  (Array.isArray(msg.to)&&msg.to.includes('all')))return true;
+  if(Array.isArray(msg.to)&&msg.to.includes(CU.station))return true;
+  if(msg.from===CU.username)return true;/* 自己發送的訊息一定看得到 */
+  return false;
+}
+
+function loadChatMessages(){
+  if(!CU)return;
+  if(chatUnsubscribe)chatUnsubscribe();
+  chatInitialized=false;
+  chatUnsubscribe=onSnapshot(
+    query(collection(db,'chatMessages'),orderBy('createdAt','desc'),limit(30)),
+    snap=>{
+      const incoming=snap.docs.map(d=>{
+        const data=d.data();
+        const createdAt=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():new Date(data.createdAt);
+        return {...data,id:d.id,createdAt};
+      }).reverse();/* 轉成時間正序顯示 */
+      const visible=incoming.filter(canSeeChatMsg);
+      /* 偵測新訊息（非自己發送）以觸發音效 */
+      if(chatInitialized){
+        visible.forEach(m=>{
+          if(!chatKnownIds.has(m.id)&&m.from!==CU.username){
+            speakChatNotice();
+          }
+        });
+      }
+      chatKnownIds=new Set(visible.map(m=>m.id));
+      chatMessages=visible;
+      chatInitialized=true;
+      renderChatMessages();
+    },
+    e=>console.error('對話牆監聽失敗',e)
+  );
+}
+
+function renderChatMessages(){
+  const w=document.getElementById('chat-messages');
+  if(!w)return;
+  const cnt=document.getElementById('chat-msg-count');
+  if(cnt)cnt.textContent=chatMessages.length?'（最近 '+chatMessages.length+' 筆）':'';
+  let html='';
+  let lastFrom=null,lastTarget=null;
+  chatMessages.forEach(m=>{
+    const mine=m.from===CU.username;
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?'發送給：'+m.to.join('、'):'');
+    const targetKey=m.from+'|'+targetLabel;
+    const showHeader=targetKey!==lastTarget;
+    const timeStr=m.createdAt?(m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'';
+    if(showHeader){
+      html+='<div class="chat-msg-header '+(mine?'mine':'theirs')+'">'+(mine?'':'<strong>'+esc(m.fromName||m.from)+'</strong>　')+esc(targetLabel)+'</div>';
+    }
+    html+='<div class="chat-msg '+(mine?'mine':'theirs')+'" data-id="'+m.id+'">'+
+      '<span class="chat-msg-text">'+esc(m.content)+'</span>'+
+      '<span class="chat-msg-time">'+timeStr+'</span>'+
+      '</div>';
+    lastTarget=targetKey;
+  });
+  w.innerHTML=html;
+  w.scrollTop=w.scrollHeight;
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+
+let chatWallSavedHeight=null;
+function toggleChatWall(){
+  chatWallCollapsed=!chatWallCollapsed;
+  const wall=document.getElementById('chat-wall');
+  const btn=document.getElementById('chat-toggle-btn');
+  if(wall){
+    if(chatWallCollapsed){
+      chatWallSavedHeight=wall.style.height||'';
+      wall.style.height='';
+    } else {
+      wall.style.height=chatWallSavedHeight||'';
+    }
+    wall.classList.toggle('collapsed',chatWallCollapsed);
+  }
+  if(btn)btn.innerHTML='<i class="ti ti-chevron-'+(chatWallCollapsed?'up':'down')+'"></i>';
+}
+
+/* 對話牆寬度上限：不得超出主內容區（.main）左邊界，避免蓋住左側功能欄 */
+function getChatWallMaxWidth(){
+  const main=document.querySelector('.main');
+  const mainLeft=main?main.getBoundingClientRect().left:0;
+  return Math.max(300,Math.min(window.innerWidth*0.9,window.innerWidth-mainLeft-32));
+}
+/* 拖動左上角把手調整對話牆寬高（貼右下角，拖動把手往左上拉=放大）*/
+(function initChatResize(){
+  const handle=document.getElementById('chat-resize-handle');
+  const wall=document.getElementById('chat-wall');
+  if(!handle||!wall)return;
+  let resizing=false,startX=0,startY=0,startW=0,startH=0;
+  handle.addEventListener('mousedown',e=>{
+    resizing=true;startX=e.clientX;startY=e.clientY;
+    const rect=wall.getBoundingClientRect();
+    startW=rect.width;startH=rect.height;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!resizing)return;
+    const dx=startX-e.clientX,dy=startY-e.clientY;
+    const newW=Math.min(Math.max(startW+dx,300),getChatWallMaxWidth());
+    const newH=Math.min(Math.max(startH+dy,280),window.innerHeight*0.9);
+    wall.style.width=newW+'px';
+    wall.style.height=newH+'px';
+    /* 拖動時若表情符號面板已開啟，同步更新位置 */
+    const p=document.getElementById('emoji-picker');
+    if(p&&p.style.display!=='none')positionEmojiPicker();
+  });
+  document.addEventListener('mouseup',()=>{resizing=false;});
+})();
+window.addEventListener('resize',()=>{
+  const wall=document.getElementById('chat-wall');
+  if(!wall||!wall.style.width)return;
+  const maxW=getChatWallMaxWidth();
+  if(parseFloat(wall.style.width)>maxW)wall.style.width=maxW+'px';
+});
+
+let emojiPickerOutsideBound=false;
+function getEmojiPickerLeftBound(){
+  /* 主內容區（.main）的左邊界，避免蓋住側邊欄 */
+  const main=document.querySelector('.main');
+  if(main){
+    const r=main.getBoundingClientRect();
+    return r.left+16;
+  }
+  return 216;
+}
+function positionEmojiPicker(){
+  const p=document.getElementById('emoji-picker');
+  const wall=document.getElementById('chat-wall');
+  if(!p||!wall)return;
+  const rect=wall.getBoundingClientRect();
+  const pickerHeight=320;
+  const leftBound=getEmojiPickerLeftBound();
+  /* 只用 left+width 定位，不混用 right，避免 left/right 衝突造成寬度計算錯誤 */
+  const width=Math.max(280,window.innerWidth-leftBound-16);
+  const maxBottom=window.innerHeight-pickerHeight-20;
+  let bottom=window.innerHeight-rect.top+8;
+  if(bottom>maxBottom)bottom=Math.max(20,maxBottom);
+  if(bottom<20)bottom=20;
+  p.style.left=leftBound+'px';
+  p.style.right='auto';
+  p.style.width=width+'px';
+  p.style.bottom=bottom+'px';
+}
+function toggleEmojiPicker(){
+  const p=document.getElementById('emoji-picker');
+  if(!p)return;
+  if(p.style.display==='none'||p.style.display===''){
+    positionEmojiPicker();
+    renderEmojiPicker();
+    p.style.display='flex';
+    if(!emojiPickerOutsideBound){
+      document.addEventListener('mousedown',closeEmojiPickerOutside);
+      emojiPickerOutsideBound=true;
+    }
+  } else {
+    p.style.display='none';
+  }
+}
+function closeEmojiPickerOutside(e){
+  const p=document.getElementById('emoji-picker');
+  const btn=document.querySelector('.chat-emoji-btn');
+  if(!p||p.style.display==='none')return;
+  if(p.contains(e.target)||(btn&&btn.contains(e.target)))return;
+  p.style.display='none';
+}
+function renderEmojiPicker(){
+  const p=document.getElementById('emoji-picker');
+  if(!p)return;
+  const tabs=Object.keys(EMOJI_TABS).map(k=>'<button class="emoji-tab-btn '+(k===activeEmojiTab?'active':'')+'" onclick="switchEmojiTab(\''+k+'\')">'+EMOJI_TAB_LABELS[k]+'</button>').join('');
+  const grid=EMOJI_TABS[activeEmojiTab].map(e=>'<span onclick="insertEmoji(\''+e.replace(/'/g,"\\'")+'\')" title="'+e+'">'+e+'</span>').join('');
+  p.innerHTML='<div class="emoji-tabs">'+tabs+'</div><div class="emoji-grid '+(activeEmojiTab==='emoji'?'emoji-tab-emoji':'')+'">'+grid+'</div>';
+}
+function switchEmojiTab(k){activeEmojiTab=k;renderEmojiPicker();}
+function insertEmoji(e){
+  const input=document.getElementById('chat-input');
+  if(input){input.value+=e;input.focus();}
+}
+
+function openChatTargetModal(){
+  const list=document.getElementById('chat-target-station-list');
+  list.innerHTML=CHAT_STATION_OPTIONS.map(s=>'<label class="chat-station-chk"><input type="checkbox" class="chat-station-cb" value="'+s.code+'" '+(chatTargetStations.includes(s.code)?'checked':'')+'>'+s.name+'</label>').join('');
+  document.getElementById(chatTargetMode==='all'?'chat-target-all':'chat-target-custom').checked=true;
+  document.getElementById('modal-chat-target').classList.add('open');
+}
+function closeChatTargetModal(){document.getElementById('modal-chat-target').classList.remove('open');}
+function onChatTargetModeChange(){}
+function confirmChatTarget(){
+  const isAll=document.getElementById('chat-target-all').checked;
+  if(isAll){
+    chatTargetMode='all';
+    chatTargetStations=[];
+    document.getElementById('chat-target-label').textContent='發送給：全線廣播';
+  } else {
+    const checked=[...document.querySelectorAll('.chat-station-cb:checked')].map(c=>c.value);
+    if(!checked.length){showToast('請至少選擇一個車站或單位');return;}
+    chatTargetMode='custom';
+    chatTargetStations=checked;
+    document.getElementById('chat-target-label').textContent='發送給：'+checked.join('、');
+  }
+  closeChatTargetModal();
+}
+
+async function sendChatMessage(){
+  if(!CU)return;
+  const input=document.getElementById('chat-input');
+  const content=input.value.trim();
+  if(!content)return;
+  if(!chatTargetMode){showToast('請先選擇發送對象');openChatTargetModal();return;}
+  const to=chatTargetMode==='all'?['all']:chatTargetStations;
+  try{
+    await addDoc(collection(db,'chatMessages'),{
+      from:CU.username,fromName:CU.name,fromStation:CU.station,
+      to,content,createdAt:new Date()
+    });
+    input.value='';
+    document.getElementById('emoji-picker').style.display='none';
+  }catch(e){showToast('訊息發送失敗：'+e.message);}
+}
+
+/* 對話訊息音效（獨立情境，與 notify 分開）*/
+function speakChatNotice(){
+  playCS('chat');
+}
+
+/* ── S級對話紀錄管理頁面：調閱全部歷史訊息 ── */
+const CHAT_LOG_PAGE_SIZE=20;
+let chatLogAll=[],chatLogFiltered=[],chatLogPage=1,chatLogLastDoc=null,chatLogHasMore=true,chatLogLoaded=false;
+
+/* 對話紀錄：進入頁面才一次性查詢（非即時監聽），避免無上限訂閱長期累積讀取成本。
+   分批載入，每次取 100 筆，可手動「載入更多」。*/
+async function loadChatLogAll(forceReload){
+  if(!CU||CU.role!=='S')return;
+  if(chatLogLoaded&&!forceReload)return;/* 同一登入週期內只查詢一次，除非手動重新整理 */
+  chatLogAll=[];chatLogLastDoc=null;chatLogHasMore=true;
+  await loadMoreChatLog();
+  chatLogLoaded=true;
+}
+async function loadMoreChatLog(){
+  if(!CU||CU.role!=='S'||!chatLogHasMore)return;
+  const btn=document.getElementById('chatlog-loadmore-btn');
+  if(btn){btn.disabled=true;btn.textContent='載入中…';}
+  try{
+    let q=query(collection(db,'chatMessages'),orderBy('createdAt','desc'),limit(100));
+    if(chatLogLastDoc)q=query(collection(db,'chatMessages'),orderBy('createdAt','desc'),startAfter(chatLogLastDoc),limit(100));
+    const snap=await getDocs(q);
+    const newDocs=snap.docs.map(d=>{
+      const data=d.data();
+      const createdAt=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():new Date(data.createdAt);
+      return {...data,id:d.id,createdAt};
+    });
+    chatLogAll=chatLogAll.concat(newDocs);
+    chatLogLastDoc=snap.docs.length?snap.docs[snap.docs.length-1]:chatLogLastDoc;
+    chatLogHasMore=snap.docs.length===100;
+    populateChatLogStationOptions();
+    filterChatLog();
+  }catch(e){console.error('對話紀錄載入失敗',e);}
+  if(btn){btn.disabled=false;btn.textContent='載入更多歷史訊息';}
+  renderChatLogLoadMoreBtn();
+}
+function renderChatLogLoadMoreBtn(){
+  const w=document.getElementById('chatlog-loadmore-wrap');
+  if(!w)return;
+  w.innerHTML=chatLogHasMore?'<button class="btn btn-sm" id="chatlog-loadmore-btn" onclick="loadMoreChatLog()">載入更多歷史訊息</button>':'<span style="font-size:11px;color:var(--color-text-tertiary)">已載入全部歷史訊息</span>';
+}
+function populateChatLogStationOptions(){
+  const sel=document.getElementById('cl-station');
+  if(!sel||sel.dataset.filled)return;
+  CHAT_STATION_OPTIONS.forEach(s=>{
+    const opt=document.createElement('option');
+    opt.value=s.code;opt.textContent=s.name;
+    sel.appendChild(opt);
+  });
+  sel.dataset.filled='1';
+}
+function filterChatLog(){
+  const station=document.getElementById('cl-station').value;
+  const dateStart=document.getElementById('cl-date-start').value;
+  const dateEnd=document.getElementById('cl-date-end').value;
+  chatLogPage=1;
+  chatLogFiltered=chatLogAll.filter(m=>{
+    if(station){
+      const isAll=m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all'));
+      const matches=isAll||(Array.isArray(m.to)&&m.to.includes(station))||m.fromStation===station;
+      if(!matches)return false;
+    }
+    if(dateStart||dateEnd){
+      if(!m.createdAt)return false;
+      const y=m.createdAt.getFullYear(),mo=(m.createdAt.getMonth()+1).toString().padStart(2,'0'),da=m.createdAt.getDate().toString().padStart(2,'0');
+      const mDate=y+'-'+mo+'-'+da;
+      if(dateStart&&mDate<dateStart)return false;
+      if(dateEnd&&mDate>dateEnd)return false;
+    }
+    return true;
+  });
+  renderChatLog();
+}
+function onChatLogDateQuickChange(){
+  const d=document.getElementById('cl-date-quick').value;
+  if(d){
+    document.getElementById('cl-date-start').value=d;
+    document.getElementById('cl-date-end').value=d;
+  } else {
+    document.getElementById('cl-date-start').value='';
+    document.getElementById('cl-date-end').value='';
+  }
+  filterChatLog();
+}
+function resetChatLogFilter(){
+  document.getElementById('cl-station').value='';
+  document.getElementById('cl-date-quick').value='';
+  document.getElementById('cl-date-start').value='';
+  document.getElementById('cl-date-end').value='';
+  filterChatLog();
+}
+function exportChatLog(){
+  const filtered=chatLogFiltered.length?chatLogFiltered:chatLogAll;
+  if(!filtered.length){showToast('目前沒有符合條件的對話紀錄');return;}
+  const headers=['時間','發送者','發送對象','內容'];
+  const rows=filtered.map(m=>{
+    const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
+    return [timeStr,m.fromName||m.from,targetLabel,m.content];
+  });
+  const now=new Date();
+  downloadCsv('對話紀錄_'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'.csv',rows,headers);
+  addLog('export','匯出對話紀錄（'+filtered.length+'筆）');
+  showToast('匯出完成（'+filtered.length+'筆）');
+}
+function renderChatLog(){
+  const totalPages=Math.max(1,Math.ceil(chatLogFiltered.length/CHAT_LOG_PAGE_SIZE));
+  if(chatLogPage>totalPages)chatLogPage=totalPages;
+  if(chatLogPage<1)chatLogPage=1;
+  const startIdx=(chatLogPage-1)*CHAT_LOG_PAGE_SIZE;
+  const pageData=chatLogFiltered.slice(startIdx,startIdx+CHAT_LOG_PAGE_SIZE);
+  document.getElementById('chatlog-body').innerHTML=pageData.map(m=>{
+    const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
+    const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
+    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td></tr>';
+  }).join('');
+  document.getElementById('chatlog-count').textContent='共 '+chatLogFiltered.length+' 筆記錄'+(totalPages>1?'　第 '+chatLogPage+' / '+totalPages+' 頁':'');
+  renderChatLogPagination(totalPages);
+}
+function renderChatLogPagination(totalPages){
+  const w=document.getElementById('chatlog-pagination');
+  if(!w)return;
+  if(totalPages<=1){w.innerHTML='';return;}
+  let html='<button class="btn btn-sm" '+(chatLogPage<=1?'disabled':'')+' onclick="goChatLogPage('+(chatLogPage-1)+')"><i class="ti ti-chevron-left"></i></button>';
+  const pages=[];
+  for(let p=1;p<=totalPages;p++){
+    if(p===1||p===totalPages||Math.abs(p-chatLogPage)<=1)pages.push(p);
+    else if(pages[pages.length-1]!=='…')pages.push('…');
+  }
+  pages.forEach(p=>{
+    if(p==='…'){html+='<span style="padding:0 4px;color:var(--color-text-tertiary)">…</span>';}
+    else{html+='<button class="btn btn-sm" style="'+(p===chatLogPage?'background:#378ADD;color:#fff;border-color:#378ADD':'')+'" onclick="goChatLogPage('+p+')">'+p+'</button>';}
+  });
+  html+='<button class="btn btn-sm" '+(chatLogPage>=totalPages?'disabled':'')+' onclick="goChatLogPage('+(chatLogPage+1)+')"><i class="ti ti-chevron-right"></i></button>';
+  w.innerHTML=html;
+}
+function goChatLogPage(p){chatLogPage=p;renderChatLog();}
+
+let soundUnsubscribe=null;
+function loadSoundSettings(){
+  if(!CU)return;
+  if(soundUnsubscribe)soundUnsubscribe();
+  /* 全域單一設定，S級編輯，所有帳號即時同步套用 */
+  soundUnsubscribe=onSnapshot(doc(db,'soundSettings','global'),snap=>{
+    if(snap.exists()){
+      const d=snap.data();
+      ['warn','danger','thirty','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
+        if(d[k]){
+          SC[k].current={type:d[k].type,id:d[k].id,name:d[k].name};
+          SC[k].vol=typeof d[k].vol==='number'?d[k].vol:SC[k].vol;
+        }
+      });
+    }
+    buildSound();
+    ['warn','danger','thirty','success','notify','chat','bike_arrive','bike_transit','group_arrive','bike_notify','group_notify'].forEach(k=>{
+      const el=document.getElementById('svol-'+k);
+      const lb=document.getElementById('svol-lbl-'+k);
+      if(el)el.value=SC[k].vol;
+      if(lb)lb.textContent=SC[k].vol+'%';
+    });
+  },e=>console.error('音效設定監聽失敗',e));
+}
+function playCurrentSoundCS(k){
+  if(k==='danger'&&SC.danger.current.type==='voice'){speakDangerPreview();}
+  else if(k==='bike_arrive'&&SC.bike_arrive.current.type==='voice'){speakBikeArriveNotice();}
+  else if(k==='bike_transit'&&SC.bike_transit.current.type==='voice'){speakBikeTransitNotice();}
+  else if(k==='group_arrive'&&SC.group_arrive.current.type==='voice'){speakGroupArriveNotice();}
+  else if(k==='bike_notify'&&SC.bike_notify.current.type==='voice'){speakBikeNotify();}
+  else if(k==='group_notify'&&SC.group_notify.current.type==='voice'){speakGroupNotify();}
+  else{playCS(k);}
+}
+
+function openSoundReplace(k){
+  soundReplaceKey=k;soundReplaceSel=SC[k].current.type==='preset'?SC[k].current.id:null;soundReplaceFile=null;
+  const title=document.getElementById('sound-replace-title');
+  if(title)title.textContent='替換音效　'+SOUND_SECTIONS_CFG.find(s=>s.k===k).label;
+  const fi=document.getElementById('sound-upload-info');if(fi){fi.style.display='none';fi.innerHTML='';}
+  renderSoundReplaceList();
+  const mb=document.getElementById('modal-sound-replace');if(mb)mb.classList.add('open');
+}
+function closeSoundReplace(){
+  const mb=document.getElementById('modal-sound-replace');if(mb)mb.classList.remove('open');
+  soundReplaceKey=null;soundReplaceSel=null;soundReplaceFile=null;
+}
+function renderSoundReplaceList(){
+  const list=document.getElementById('sound-replace-preset-list');if(!list||!soundReplaceKey)return;
+  list.innerHTML=PRESETS[soundReplaceKey].map(p=>{
+    const isSel=soundReplaceSel===p.id&&!soundReplaceFile;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--border-radius-md);border:0.5px solid ${isSel?'#378ADD':'var(--color-border-tertiary)'};cursor:pointer;font-size:12px;background:${isSel?'var(--color-background-info)':'var(--color-background-primary)'};color:${isSel?'var(--color-text-info)':'var(--color-text-primary)'}" onclick="selSoundPreset('${p.id}')">
+      <button style="width:26px;height:26px;border-radius:50%;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:11px" id="spp-${p.id}" onclick="event.stopPropagation();playSoundPreview('${soundReplaceKey}','${p.id}',this)"><i class="ti ti-player-play" style="font-size:10px"></i></button>
+      <span style="flex:1">${p.name}</span>
+      <span style="font-size:10px;color:var(--color-text-tertiary)">${p.tag}</span>
+      ${isSel?'<i class="ti ti-check" style="color:#378ADD;font-size:12px"></i>':''}
+    </div>`;
+  }).join('');
+}
+function selSoundPreset(id){soundReplaceSel=id;soundReplaceFile=null;const fi=document.getElementById('sound-upload-info');if(fi)fi.style.display='none';renderSoundReplaceList();}
+function playSoundPreview(k,id,btn){
+  if(soundPlayInterval){clearInterval(soundPlayInterval);soundPlayInterval=null;}
+  if(soundPlayingId){const old=document.getElementById('spp-'+soundPlayingId);if(old){old.innerHTML='<i class="ti ti-player-play" style="font-size:10px"></i>';old.style.background='';}}
+  if(soundPlayingId===id){soundPlayingId=null;return;}
+  soundPlayingId=id;
+  if(btn){btn.innerHTML='<i class="ti ti-player-pause" style="font-size:10px"></i>';btn.style.background='#378ADD';btn.style.color='#fff';}
+  const p=PRESETS[k].find(x=>x.id===id);if(!p)return;
+  const v=SC[k].vol/100;p.fn(v);
+  soundPlayInterval=setInterval(()=>p.fn(v),700);
+  setTimeout(()=>{clearInterval(soundPlayInterval);soundPlayInterval=null;soundPlayingId=null;if(btn){btn.innerHTML='<i class="ti ti-player-play" style="font-size:10px"></i>';btn.style.background='';btn.style.color='';}},3500);
+}
+function handleSoundUpload(input){
+  const file=input.files[0];if(!file)return;
+  soundReplaceFile=file;soundReplaceSel=null;
+  const fi=document.getElementById('sound-upload-info');
+  if(fi){fi.style.display='flex';fi.innerHTML='<i class="ti ti-check" style="color:#1D9E75"></i>'+file.name+' ('+Math.round(file.size/1024)+' KB)　已選取';}
+  renderSoundReplaceList();
+}
+async function confirmSoundReplace(){
+  if(!soundReplaceKey)return;
+  let isCustomUpload=false;
+  if(soundReplaceFile){
+    /* 解碼音訊檔案存入 SC._audioBuffer */
+    try{
+      const ab=await soundReplaceFile.arrayBuffer();
+      const ctx=new AudioContext();
+      SC[soundReplaceKey]._audioBuffer=await ctx.decodeAudioData(ab);
+    }catch(e){console.error('音訊解碼失敗',e);}
+    SC[soundReplaceKey].current={type:'custom',name:soundReplaceFile.name,id:null};
+    isCustomUpload=true;
+  } else if(soundReplaceSel){
+    const p=(PRESETS[soundReplaceKey]||[]).find(x=>x.id===soundReplaceSel);
+    if(p)SC[soundReplaceKey].current={type:'preset',id:p.id,name:p.name};
+  } else {showToast('請選擇音效或上傳檔案');return;}
+  refreshSoundCurrent(soundReplaceKey);
+  closeSoundReplace();
+  /* 自動儲存到 Firebase，避免忘記按「儲存設定」導致改動消失 */
+  await saveAllSound(true);
+  showToast((isCustomUpload?'已替換為自訂音效：'+SC[soundReplaceKey].current.name:'已替換為：'+SC[soundReplaceKey].current.name)+'　（已自動儲存）');
+}
+
+/* ── 事件系統 ── */
+function fmt(dt){return dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');}
+function fmtCd(ms){if(ms<=0)return'00:00';const s=Math.floor(ms/1000),m=Math.floor(s/60);return m.toString().padStart(2,'0')+':'+(s%60).toString().padStart(2,'0');}
+function cdCls(ms){if(ms<=90000)return'danger';if(ms<=180000)return'warn';return'normal';}
+const NOTIFY_TYPES=['自行車旅客','團體旅客'];
+const STATION_ORDER_LIST=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
+const TC={'視障旅客':'tag-red','年長旅客':'tag-amber','輪椅旅客（攜帶輪椅）':'tag-green','輪椅旅客（協助駐留）':'tag-green','自行車旅客':'tag-teal','團體旅客':'tag-purple','其他':'tag-gray'};
+let events=[];
+let nextId=1;
+let eventsUnsubscribe=null;
+/* ── 已知的 event ID 集合，用來偵測「新進」事件並觸發音效 ── */
+const knownEventIds=new Set();
+let eventsInitialized=false;
+
+function startEventsListener(){
+  if(eventsUnsubscribe)eventsUnsubscribe();
+  const q=query(collection(db,'events'),orderBy('departTime','asc'));
+  eventsUnsubscribe=onSnapshot(q,snap=>{
+    const incoming=[];
+    snap.forEach(d=>{
+      const data=d.data();
+      const departTime=data.departTime&&data.departTime.toDate?data.departTime.toDate():new Date(data.departTime);
+          let arrivalTime=departTime;
+    if(data.arrivalTime&&data.arrivalTime.toDate){arrivalTime=data.arrivalTime.toDate();}
+    else if(data.arrivalTime){arrivalTime=new Date(data.arrivalTime);}
+    incoming.push({...data,id:d.id,departTime,arrivalTime});
+    });
+    /* 偵測新進事件（已初始化後才判斷，避免登入時全部觸發） */
+    if(eventsInitialized&&CU&&CU.role!=='S'){
+      incoming.forEach(ev=>{
+        if(!knownEventIds.has(ev.id)){
+          if(ev.to===CU.station){
+            /* 事件建立時：依類型播放對應的「收到訊息」提醒音 */
+            if(ev.type==='自行車旅客') speakBikeNotify();
+            else if(ev.type==='團體旅客') speakGroupNotify();
+            else speakArrivalNotice();
+          } else if(ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(CU.station)){
+            speakBikeTransitNotice();
+          }
+        }
+      });
+    }
+    knownEventIds.clear();
+    incoming.forEach(ev=>knownEventIds.add(ev.id));
+    events=incoming;
+    eventsInitialized=true;
+    /* 載入時：自動結案超過10分鐘的舊事件 */
+    const now=new Date();
+    incoming.forEach(ev=>{
+      if((ev.arrivalTime||ev.departTime)&&(now-(ev.arrivalTime||ev.departTime))>600000&&!autoCloseF.has(ev.id)){
+        autoCloseF.add(ev.id);
+        closeAlertCard(ev.id);
+        const d=ev.departTime;
+        const mm=(d.getMonth()+1).toString().padStart(2,'0');
+        const dd=d.getDate().toString().padStart(2,'0');
+        const hh=d.getHours().toString().padStart(2,'0');
+        const mi=d.getMinutes().toString().padStart(2,'0');
+        addHistoryToDb({time:mm+'/'+dd+' '+hh+':'+mi,from:ev.from,to:ev.to,dir:ev.dir,type:ev.type,trainGroup:ev.trainGroup||'—',status:'超時結案',creator:ev.createdBy||'—',note:ev.note||'',reason:'發車超過10分鐘未確認，系統自動結案'});
+        deleteEventFromDb(ev.id);
+      }
+    });
+    renderHistory();
+    renderEvents();
+  });
+}
+
+async function addEventToDb(evData){
+  const d={...evData};
+  delete d.id;
+  d.departTime=evData.departTime;/* 保持 Date，Firestore 自動轉 Timestamp */
+  const ref=await addDoc(collection(db,'events'),d);
+  return ref.id;
+}
+async function updateEventInDb(id,data){
+  const d={...data};delete d.id;
+  try{await updateDoc(doc(db,'events',id),d);}catch(e){console.error(e);}
+}
+async function deleteEventFromDb(id){
+  try{await deleteDoc(doc(db,'events',id));}catch(e){console.error(e);}
+}
+const wF=new Set(),dF=new Set(),thF=new Set(),doF=new Set(),autoCloseF=new Set();
+/* ── 堆疊式通知卡片機制：每個事件獨立顯示、獨立音效、獨立結案 ── */
+const activeAlertCards=new Map();/* eventId -> {type,soundKey,intervalId,ttsLooping,ttsTimeout} */
+
+function showAlertCard(eventId,type,icon,title,info,extra,btns,soundKey){
+  let card=document.getElementById('alert-card-'+eventId);
+  if(!card){
+    card=document.createElement('div');
+    card.id='alert-card-'+eventId;
+    document.getElementById('alert-stack').appendChild(card);
+    activeAlertCards.set(eventId,{type,soundKey});
+  } else {
+    const a=activeAlertCards.get(eventId);
+    a.type=type;a.soundKey=soundKey;
+  }
+  card.className='alert-card '+type;
+  card.innerHTML='<div class="alert-icon">'+icon+'</div><div class="alert-title">'+title+'</div>'+info+(extra||'')+'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px">'+btns+'</div>';
+  startCardLoop(eventId,soundKey);
+}
+function closeAlertCard(eventId){
+  stopCardLoop(eventId);
+  activeAlertCards.delete(eventId);
+  const card=document.getElementById('alert-card-'+eventId);
+  if(card)card.remove();
+}
+function startCardLoop(eventId,soundKey){
+  stopCardLoop(eventId);
+  const a=activeAlertCards.get(eventId);
+  if(!a)return;
+  /* danger TTS：遞迴循環直到確認 */
+  if(soundKey==='danger'&&SC.danger.current.type==='voice'){
+    a.ttsLooping=true;
+    speakDangerForCard(eventId);
+  /* bike_arrive / group_arrive TTS：speakTTS3x 內部已處理 3 次，不能再走 700ms 迴圈
+     否則 window.speechSynthesis.cancel() 會在每 700ms 時打斷語音 */
+  } else if(soundKey==='bike_arrive'){
+    if(SC.bike_arrive.current.type==='voice') speakBikeArriveNotice();
+    else{playCS(soundKey);a.intervalId=setInterval(()=>playCS(soundKey),700);}
+  } else if(soundKey==='group_arrive'){
+    if(SC.group_arrive.current.type==='voice') speakGroupArriveNotice();
+    else{playCS(soundKey);a.intervalId=setInterval(()=>playCS(soundKey),700);}
+  } else if(soundKey){
+    playCS(soundKey);
+    a.intervalId=setInterval(()=>playCS(soundKey),700);
+  }
+}
+function stopCardLoop(eventId){
+  const a=activeAlertCards.get(eventId);
+  if(!a)return;
+  if(a.intervalId){clearInterval(a.intervalId);a.intervalId=null;}
+  a.ttsLooping=false;
+  if(a.ttsTimeout){clearTimeout(a.ttsTimeout);a.ttsTimeout=null;}
+}
+/* 共用：建立 danger 語音 utterance */
+function buildDangerUtter(vol){
+  const utter=new SpeechSynthesisUtterance('引導旅客即將到站，請確認人員是否就定位');
+  utter.lang='zh-TW';utter.rate=1;utter.pitch=1;
+  const voices=window.speechSynthesis.getVoices();
+  const prefer=voices.find(v=>/zh.*TW|zh.*tw|Google.*TW|cmn-TW/i.test(v.lang+v.name));
+  if(prefer)utter.voice=prefer;
+  utter.volume=vol!==undefined?vol:(SC&&SC.danger?SC.danger.vol/100:0.8);
+  return utter;
+}
+/* 語音合成（danger 卡片專用，per-card 循環；不呼叫 cancel，多卡語音會自然依序排隊播放）*/
+function speakDangerForCard(eventId){
+  if(!window.speechSynthesis)return;
+  const a=activeAlertCards.get(eventId);
+  if(!a)return;
+  const utter=buildDangerUtter();
+  utter.onend=()=>{if(a.ttsLooping)a.ttsTimeout=setTimeout(()=>speakDangerForCard(eventId),1500);};
+  window.speechSynthesis.speak(utter);
+}
+/* 一次性播放（playCS 呼叫，例如試聽/預覽用）*/
+function speakDangerOnce(vol){
+  if(!window.speechSynthesis)return;
+  window.speechSynthesis.speak(buildDangerUtter(vol));
+}
+/* 音效設定頁面試聽按鈕用（一次性，不循環，不綁定卡片）*/
+function speakDangerPreview(){
+  if(!window.speechSynthesis)return;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(buildDangerUtter());
+}
+function playCS(k){
+  const cur=SC[k].current;
+  const v=SC[k].vol/100;
+  if(k==='notify'){
+    /* notify：根據設定決定播放方式 */
+    if(cur.type==='preset'){
+      const p=PRESETS.notify&&PRESETS.notify.find(x=>x.id===cur.id);
+      if(p){p.fn(v);return;}
+    }
+    if(cur.type==='custom'&&SC[k]._audioBuffer){
+      /* 自訂上傳音效 */
+      const ctx=ga();const src=ctx.createBufferSource();
+      src.buffer=SC[k]._audioBuffer;const g=ctx.createGain();
+      g.gain.value=v;src.connect(g);g.connect(ctx.destination);src.start();
+      return;
+    }
+    /* fallback：語音播報 */
+    speakArrivalNoticeVol(v);
+    return;
+  }
+  if(k==='danger'&&cur.type==='voice'){
+    speakDangerOnce(v);return;
+  }
+  if(cur.type==='preset'){
+    const p=PRESETS[k]&&PRESETS[k].find(x=>x.id===cur.id);
+    if(p)p.fn(v);
+  } else if(cur.type==='custom'&&SC[k]._audioBuffer){
+    const ctx=ga();const src=ctx.createBufferSource();
+    src.buffer=SC[k]._audioBuffer;const g=ctx.createGain();
+    g.gain.value=v;src.connect(g);g.connect(ctx.destination);src.start();
+  }
+}
+function speakArrivalNoticeVol(vol){
+  if(!window.speechSynthesis)return;
+  const msg='您有一則旅客引導訊息';
+  let count=0;
+  function doSpeak(){
+    if(count>=3)return;
+    const u=new SpeechSynthesisUtterance(msg);
+    u.lang='zh-TW';u.rate=0.9;u.volume=Math.min(1,Math.max(0,vol));
+    u.onend=()=>{count++;setTimeout(doSpeak,600);};
+    window.speechSynthesis.speak(u);
+  }
+  window.speechSynthesis.cancel();doSpeak();
+}
+function buildNote(){const p=[];[['人數','f-n1'],['陪同者','f-n2'],['上衣顏色','f-n3'],['褲／裙顏色','f-n4'],['其他特徵','f-n5']].forEach(([l,id])=>{const v=(document.getElementById(id)||{}).value||'';if(v.trim())p.push(l+'：'+v.trim());});return p.join('\n');}
+function parseNote(note){const lm={'人數':'f-n1','陪同者':'f-n2','上衣顏色':'f-n3','褲／裙顏色':'f-n4','其他特徵':'f-n5'};Object.values(lm).forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});if(!note)return;note.split('\n').forEach(line=>{const m=line.match(/^(.+?)：(.*)$/);if(m&&lm[m[1]]){const el=document.getElementById(lm[m[1]]);if(el)el.value=m[2];}});}
+function renderEvents(){
+  const el=document.getElementById('event-list');if(!el)return;
+  renderTransitBanner();
+  const filteredEvs=getFilteredEvents();if(!filteredEvs.length){el.innerHTML='<div class="empty-state"><i class="ti ti-mood-happy"></i>目前無進行中的引導事件</div>';return;}
+  el.innerHTML=[...filteredEvs].sort((a,b)=>a.departTime-b.departTime).map(ev=>{
+    const isNotify=isNotifyEvent(ev.type);
+    const isBike=ev.type==='自行車旅客';
+    const isTransit=isBike&&CU&&getIntermediateStations(ev.from,ev.to).includes(CU.station);
+    const arrT=ev.arrivalTime||ev.departTime;
+    const msArr=arrT-new Date();
+    const clsArr=isNotify?'normal':(cdCls(msArr)==='danger'?'danger':cdCls(msArr)==='warn'?'warn':'normal');
+    const bikeTotal=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
+    /* 同班次所有自行車事件的累計台數（同迄站＋同到站時間） */
+    const trainTotalBikes=isBike?events.filter(e=>e.type==='自行車旅客'&&e.to===ev.to&&e.arrivalTimeStr===ev.arrivalTimeStr&&e.dir===ev.dir).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0):0;
+    const bikeRemain=Math.max(0,4-trainTotalBikes);
+    const notifyColor=isBike?'#0E667A':'#6B3FA0';
+    const notifyBg=isBike?'#E0F3F7':'#F0EAFA';
+    const rightSide=isNotify?
+      '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
+        '<div style="font-size:11px;color:var(--color-text-secondary)">迄站到站時間</div>'+
+        '<div style="font-size:24px;font-weight:700;color:'+notifyColor+'">'+( ev.arrivalTimeStr||'—:—')+'</div>'+
+        '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">迄站 '+SN[ev.to]+'</div>'+
+        (isBike?'<div style="font-size:10px;color:'+notifyColor+';margin-top:5px;line-height:1.8">本次：02車門 '+(ev.bikeDoor2||0)+'台 ／ 09車門 '+(ev.bikeDoor9||0)+'台<br>同班累計：共'+trainTotalBikes+'台 · 剩餘'+bikeRemain+'台</div>':'')+
+        '<div style="margin-top:6px;display:inline-block;padding:2px 9px;border-radius:4px;background:'+notifyBg+';color:'+notifyColor+';font-size:11px;font-weight:600">回收感熱紙</div>'+
+      '</div>':
+      '<div class="countdown-box" style="text-align:center;flex-shrink:0">'+
+        '<div class="countdown-num '+clsArr+'" id="cd-'+ev.id+'">'+fmtCd(msArr)+'</div>'+
+        '<div class="countdown-label">迄站發車倒數</div>'+
+        '<div style="margin-top:6px;font-size:10px;line-height:1.9;font-family:monospace">'+
+          '<div style="color:var(--color-text-secondary)">起站 <span style="display:inline-block;width:5em">'+SN[ev.from]+'</span> '+fmt(ev.departTime)+' 發車</div>'+
+          (ev.arrivalTimeStr?'<div style="color:#1D9E75;font-weight:600">迄站 <span style="display:inline-block;width:5em">'+SN[ev.to]+'</span> '+ev.arrivalTimeStr+' 發車</div>':'<div style="color:var(--color-text-tertiary)">迄站時間計算中</div>')+
+        '</div>'+
+      '</div>';
+    return(
+  '<div class="event-card '+clsArr+'" id="card-'+ev.id+'" style="display:grid;grid-template-columns:1fr 160px;align-items:center;gap:12px">'+
+  '<div class="event-info" style="min-width:0">'+
+    '<div class="event-route" style="font-size:14px;font-weight:600;margin-bottom:5px">'+
+      ev.from+' '+SN[ev.from]+' → '+ev.to+' '+SN[ev.to]+
+      ' <span style="color:var(--color-text-secondary);font-weight:400;font-size:11px">'+(ev.dir==='down'?'↓ 下行':'↑ 上行')+'</span>'+
+    '</div>'+
+    '<div class="event-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">'+
+      '<span class="tag '+(TC[ev.type]||'tag-gray')+'">'+ev.type+'</span>'+
+      (isTransit?'<span class="tag tag-teal" style="border-style:dashed">途經本站</span>':'')+
+      (isBike?'':'<span class="tag tag-gray">車組 '+(ev.trainGroup||'—')+'</span>')+
+      '<span class="tag tag-gray">'+ev.gate+'</span>'+
+      '<span class="tag tag-gray">'+ev.gender+'</span>'+
+    '</div>'+
+    (ev.note?'<div class="event-note" style="margin-bottom:4px"><i class="ti ti-note" style="font-size:11px"></i> '+ev.note+'</div>':'')+
+    '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
+      '<button class="btn btn-sm" data-id="'+ev.id+'" onclick="openEditModal(this.dataset.id)"><i class="ti ti-edit"></i> 編輯</button>'+
+      '<button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A" data-id="'+ev.id+'" onclick="delEvent(this.dataset.id)"><i class="ti ti-trash"></i> 刪除</button>'+
+      '<span style="font-size:10px;color:var(--color-text-tertiary)">建立者：'+ev.createdBy+'</span>'+
+    '</div>'+
+  '</div>'+
+  rightSide+
+'</div>'
+);}).join('');
+}
+function delEvent(id){if(confirm('確定刪除？')){deleteEventFromDb(id);addLog('delete','刪除事件 '+id);}}
+function aInfo(ev){
+  const base='<div class="alert-info">'+
+    '<div class="alert-info-row"><span class="alert-info-label">路線</span><span class="alert-info-val">'+ev.from+' '+SN[ev.from]+' → '+ev.to+' '+SN[ev.to]+'</span></div>'+
+    '<div class="alert-info-row"><span class="alert-info-label">方向</span><span class="alert-info-val">'+(ev.dir==='down'?'↓ 下行（往高鐵）':'↑ 上行（往北屯）')+'</span></div>'+
+    '<div class="alert-info-row"><span class="alert-info-label">旅客類別</span><span class="alert-info-val">'+ev.type+'</span></div>';
+  if(ev.type==='自行車旅客'){
+    const t=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
+    return base+
+      '<div class="alert-info-row"><span class="alert-info-label">車組</span><span class="alert-info-val">'+(ev.trainGroup||'—')+'</span></div>'+
+      '<div class="alert-info-row"><span class="alert-info-label">自行車</span><span class="alert-info-val">02車門 '+(ev.bikeDoor2||0)+'台 ／ 09車門 '+(ev.bikeDoor9||0)+'台（共 '+t+' 台）</span></div>'+
+    '</div>';
+  }
+  if(ev.type==='團體旅客'){
+    const cnt=ev.note?ev.note.match(/人數[：:]\s*(\d+)/)?.[1]:'';
+    return base+
+      '<div class="alert-info-row"><span class="alert-info-label">車組</span><span class="alert-info-val">'+(ev.trainGroup||'—')+'</span></div>'+
+      '<div class="alert-info-row"><span class="alert-info-label">車門</span><span class="alert-info-val">'+ev.gate+'</span></div>'+
+      (cnt?'<div class="alert-info-row"><span class="alert-info-label">人數</span><span class="alert-info-val">'+cnt+' 人</span></div>':'')+
+    '</div>';
+  }
+  return base+
+    '<div class="alert-info-row"><span class="alert-info-label">車組</span><span class="alert-info-val">'+(ev.trainGroup||'—')+'</span></div>'+
+    '<div class="alert-info-row"><span class="alert-info-label">車門</span><span class="alert-info-val">'+ev.gate+'</span></div>'+
+    '<div class="alert-info-row"><span class="alert-info-label">性別</span><span class="alert-info-val">'+ev.gender+'</span></div>'+
+  '</div>';
+}
+function finishOk(id){
+  const ev=events.find(e=>e.id===id);
+  if(ev){
+    const now=new Date();
+    const mm=(now.getMonth()+1).toString().padStart(2,'0');
+    const dd=now.getDate().toString().padStart(2,'0');
+    const hh=now.getHours().toString().padStart(2,'0');
+    const mi=now.getMinutes().toString().padStart(2,'0');
+    const rec={time:mm+'/'+dd+' '+hh+':'+mi,from:ev.from,to:ev.to,dir:ev.dir,type:ev.type,trainGroup:ev.trainGroup||'—',status:'完成',creator:ev.createdBy||'—',note:ev.note||'',reason:''};
+    addHistoryToDb(rec);
+    addLog('edit','事件結案（完成）'+ev.from+'→'+ev.to+' '+ev.type);
+    deleteEventFromDb(id);
+    setTimeout(loadHistory,1000);
+  }
+  closeAlertCard(id);
+}
+function finishFail(id){
+  stopCardLoop(id);/* 停止音效，卡片原地改為填寫原因表單，保持顯示直到送出 */
+  const ev=events.find(e=>e.id===id);if(!ev)return;
+  const card=document.getElementById('alert-card-'+id);
+  if(card){
+    card.className='alert-card warn';
+    card.innerHTML='<div class="alert-icon">📝</div><div class="alert-title">請填寫未接到原因</div>'+aInfo(ev)+'<textarea id="nm-'+id+'" style="width:100%;min-height:52px;font-size:12px;padding:7px;border:0.5px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);margin:10px 0" placeholder="請說明原因..."></textarea><div style="display:flex;gap:10px;justify-content:center"><button class="btn btn-primary" data-id="'+id+'" onclick="submitFail(this.dataset.id)"><i class="ti ti-check"></i> 送出</button></div>';
+  }
+}
+function submitFail(id){
+  const ev=events.find(e=>e.id===id);
+  const ta=document.getElementById('nm-'+id);
+  const reason=ta?ta.value:'';
+  if(ev){
+    const now=new Date();
+    const mm=(now.getMonth()+1).toString().padStart(2,'0');
+    const dd=now.getDate().toString().padStart(2,'0');
+    const hh=now.getHours().toString().padStart(2,'0');
+    const mi=now.getMinutes().toString().padStart(2,'0');
+    const rec={time:mm+'/'+dd+' '+hh+':'+mi,from:ev.from,to:ev.to,dir:ev.dir,type:ev.type,trainGroup:ev.trainGroup||'—',status:'未完成',creator:ev.createdBy||'—',note:ev.note||'',reason:reason};
+    addHistoryToDb(rec);
+    addLog('edit','事件結案（未完成）'+ev.from+'→'+ev.to+' '+ev.type);
+    deleteEventFromDb(id);
+    setTimeout(loadHistory,1000);
+  }
+  closeAlertCard(id);
+}
+/* ── 側欄權限控制 ── */
+function applyNavRole(){
+  if(!CU)return;
+  const roleOrder={S:3,A:2,B:1};
+  const myLevel=roleOrder[CU.role]||1;
+  document.querySelectorAll('[data-min-role]').forEach(el=>{
+    const need=roleOrder[el.getAttribute('data-min-role')]||1;
+    el.style.display=myLevel>=need?'':'none';
+  });
+  /* B級：新增事件按鈕只有本站（已存在邏輯），此處不另外處理 */
+}
+
+function showPage(el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+el.dataset.page).classList.add('active');
+  el.classList.add('active');
+  /* 切換到對話紀錄頁時才載入（避免登入時就無限制查詢全部歷史）*/
+  if(el.dataset.page==='chatlog'){
+    loadChatLogAll();
+  }
+  /* 切換到報表頁時更新月報標籤 */
+  if(el.dataset.page==='report'){
+    const now=new Date();
+    const m=now.getMonth()===0?12:now.getMonth();
+    const y=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const lb=document.getElementById('month-report-label');
+    if(lb)lb.textContent=y+' 年 '+m+' 月份月報已就緒';
+    /* 更新 notify-bar */
+    const nb=document.querySelector('#page-report .notify-bar');
+    if(nb)nb.innerHTML='<i class="ti ti-bell"></i>點擊下方按鈕下載 '+y+' 年 '+m+' 月份月報，或自訂日期區間匯出。';
+  }
+}
+function getCurrentTimetable(dir){
+  /* S級手動指定時刻表版次：優先於行事曆自動判斷，全帳號同步生效 */
+  if(ttMode&&ttMode!=='auto'){
+    if(ttMode==='H1')return dir==='down'?TH1D:TH1U;
+    if(ttMode==='H2')return dir==='down'?THRD:THRU;
+    if(ttMode==='W05')return dir==='down'?TD:TU;
+  }
+  /* 根據當前時刻表模式選擇正確資料（行事曆自動判斷）*/
+  const today2=new Date();
+  const k2=calKey(today2.getFullYear(),today2.getMonth()+1,today2.getDate());
+  const entry=calOvr&&calOvr[k2]?calOvr[k2]:(H26[k2]?{type:H26[k2]}:null);
+  const type=entry?entry.type:(()=>{const dow=new Date().getDay();return dow===6?'first':dow===0?'rest':'weekday';})();
+  if(type==='first') return dir==='down'?TH1D:TH1U;
+  if(type==='rest') return dir==='down'?THRD:THRU;
+  return dir==='down'?TD:TU;
+}
+/* ── 查詢迄站發車時間（欄位索引+相對偏移法）── */
+function getArrivalTime(fromStation,departTimeStr,toStation,dir){
+  const tbl=getCurrentTimetable(dir);
+  const fromTimes=tbl[fromStation]||[];
+  const toTimes=tbl[toStation]||[];
+  if(!fromTimes.includes(departTimeStr)||!toTimes.length)return null;
+  const idx=fromTimes.indexOf(departTimeStr);
+  /* 相對偏移 = 迄站班次數 - 起站班次數（始發車造成的欄位偏移）*/
+  const offset=toTimes.length-fromTimes.length;
+  const targetIdx=idx+offset;
+  if(targetIdx<0||targetIdx>=toTimes.length)return null;
+  return toTimes[targetIdx];
+}
+function ttTimeToMin(t){const[h,m]=t.split(':').map(Number);return(h<5?h+24:h)*60+m;}
+
+function getNextN(st,dir,n=4){
+  let tbl;
+  try{tbl=getCurrentTimetable(dir);}catch(e){tbl=dir==='down'?TD:TU;}
+  const times=tbl[st]||[],now=new Date(),ds=now.toISOString().split('T')[0],res=[];
+  for(let t of times){if(res.length>=n)break;const dt=new Date(ds+'T'+t.padStart(5,'0')+':00');if(t.startsWith('00'))dt.setDate(dt.getDate()+1);if(dt>now)res.push(dt);}
+  return res;
+}
+function updateTrains(){
+  const st=document.getElementById('f-from').value||'G9';
+  const to=document.getElementById('f-to').value||'G13';
+  const dir=document.getElementById('f-dir').value||'down';
+  document.getElementById('train-options').innerHTML=getNextN(st,dir,4).map((dt,i)=>{
+    const departStr=dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
+    const arrStr=getArrivalTime(st,departStr,to,dir);
+    const arrInfo=arrStr?'<span style="font-size:10px;color:#1D9E75;margin-left:6px">→ '+SN[to]+'站 '+arrStr+' 到站</span>':'';
+    return '<label class="train-option '+(i===0?'selected':'')+'"><input type="radio" name="tsel" value="'+dt.toISOString()+'" data-depart="'+departStr+'" data-arr="'+(arrStr||'')+'" '+(i===0?'checked':'')+' onchange="this.closest(\'.next-trains\').querySelectorAll(\'.train-option\').forEach(x=>x.classList.remove(\'selected\'));this.closest(\'.train-option\').classList.add(\'selected\');updateBikeCapacity();">'+fmt(dt)+' 發車'+(i===0?' <span style="font-size:10px;color:#0c447c">（下一班）</span>':'')+(arrInfo?arrInfo:'')+'</label>';
+  }).join('');
+}
+function clearNF(){['f-n1','f-n2','f-n3','f-n4','f-n5'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';})}
+
+function getDefaultStation(){
+  if(!CU) return 'G9';
+  const st=CU.station;
+  if(st==='北段辦') return 'G9';
+  if(st==='南段辦') return 'G17';
+  /* 一般車站帳號直接用綁定的站碼 */
+  const validStations=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
+  return validStations.includes(st)?st:'G9';
+}
+function getDefaultToStation(from){
+  /* 迄站：預設與起站相同，由使用者依實際上下行方向手動選擇 */
+  return from;
+}
+
+function openModal(){
+  if(suspended){showToast('系統暫停使用中，無法新增事件');return;}
+  document.getElementById('f-edit-id').value='';
+  document.getElementById('mf-title').textContent='新增引導事件';
+  document.getElementById('mf-submit').textContent='建立事件';
+  document.getElementById('train-sel-wrap').style.display='';
+  const defFrom=getDefaultStation();
+  document.getElementById('f-from').value=defFrom;
+  document.getElementById('f-to').value=getDefaultToStation(defFrom);
+  /* B 級：起站鎖定為帳號綁定車站，隱藏 select 改顯示靜態文字 */
+  const fromSel=document.getElementById('f-from');
+  const fromLocked=document.getElementById('f-from-locked');
+  const fromLockedLabel=document.getElementById('f-from-locked-label');
+  if(CU&&CU.role==='B'){
+    fromSel.style.display='none';
+    fromLocked.style.display='';
+    fromLockedLabel.textContent=defFrom+' '+((SN&&SN[defFrom])||'');
+  } else {
+    fromSel.style.display='';
+    fromLocked.style.display='none';
+  }
+  clearNF();autoDir();
+  /* 完整重置自行車旅客相關狀態，避免前次選擇殘留 */
+  document.getElementById('f-type').value='視障旅客';
+  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
+  const bci=document.getElementById('bike-cap-info');if(bci){bci.style.display='none';}
+  const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
+  const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
+  const gate=document.getElementById('f-gate');
+  if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';gate.value='01 車門';}
+  /* 恢復 G17 選項（上次若選了自行車旅客會被停用） */
+  ['f-from','f-to'].forEach(id=>{const el=document.getElementById(id);if(el){const opt=el.querySelector('option[value="G17"]');if(opt)opt.disabled=false;}});
+  /* 恢復性別欄位 */
+  const genderEl=document.getElementById('f-gender');
+  if(genderEl){genderEl.disabled=false;genderEl.style.opacity='1';genderEl.style.cursor='';genderEl.value='男性';}
+  document.getElementById('modal-form').classList.add('open');}
+function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;document.getElementById('f-edit-id').value=id;document.getElementById('mf-title').textContent='編輯引導事件';document.getElementById('mf-submit').textContent='儲存變更';document.getElementById('train-sel-wrap').style.display='none';document.getElementById('f-from').value=ev.from;document.getElementById('f-to').value=ev.to;document.getElementById('f-dir').value=ev.dir;document.getElementById('dir-display').textContent=ev.dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';document.getElementById('f-train').value=ev.trainGroup||'';document.getElementById('f-type').value=ev.type;document.getElementById('f-gate').value=ev.gate;document.getElementById('f-gender').value=ev.gender;parseNote(ev.note||'');
+  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display=ev.type==='自行車旅客'?'block':'none';
+  const gate=document.getElementById('f-gate');
+  if(gate){gate.disabled=ev.type==='自行車旅客';gate.style.opacity=ev.type==='自行車旅客'?'0.35':'1';gate.style.cursor=ev.type==='自行車旅客'?'not-allowed':'';}
+  if(ev.type==='自行車旅客'){const b2=document.getElementById('f-bike2');const b9=document.getElementById('f-bike9');if(b2)b2.value=ev.bikeDoor2||0;if(b9)b9.value=ev.bikeDoor9||0;}
+  document.getElementById('modal-form').classList.add('open');}
+function closeFormModal(){
+  document.getElementById('modal-form').classList.remove('open');
+  /* 關閉時重置 gate 啟用狀態與自行車台數，防止下次開啟時殘留 */
+  const gate=document.getElementById('f-gate');
+  if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';}
+  const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display='none';
+  const bci=document.getElementById('bike-cap-info');if(bci)bci.style.display='none';
+  const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
+  const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
+  /* 恢復 G17 選項可用（自行車旅客選取時被停用） */
+  ['f-from','f-to'].forEach(id=>{const el=document.getElementById(id);if(el){const opt=el.querySelector('option[value="G17"]');if(opt)opt.disabled=false;}});
+  /* 恢復性別欄位 */
+  const gender=document.getElementById('f-gender');
+  if(gender){gender.disabled=false;gender.style.opacity='1';gender.style.cursor='';}
+}
+async function submitEvent(){
+  const eid=document.getElementById('f-edit-id').value,note=buildNote();
+  if(eid){
+    /* 編輯現有事件 */
+    const ev=events.find(e=>e.id==eid);if(!ev)return;
+    const updated={from:document.getElementById('f-from').value,to:document.getElementById('f-to').value,dir:document.getElementById('f-dir').value,trainGroup:document.getElementById('f-train').value,type:document.getElementById('f-type').value,gate:document.getElementById('f-gate').value,gender:document.getElementById('f-gender').value,note};
+    await updateEventInDb(eid,updated);
+    addLog('edit','編輯事件 '+ev.from+'→'+ev.to);
+    closeFormModal();return;
+  }
+  /* 新增事件 */
+  const newType=document.getElementById('f-type').value;
+  const isBike=newType==='自行車旅客';
+  const bikeDoor2=isBike?parseInt((document.getElementById('f-bike2')||{}).value||'0'):0;
+  const bikeDoor9=isBike?parseInt((document.getElementById('f-bike9')||{}).value||'0'):0;
+  const sel=document.querySelector('input[name="tsel"]:checked');if(!sel){alert('請選擇班次');return;}if(!CU)return;
+  const newTo=document.getElementById('f-to').value||'G13';
+  const newFrom=document.getElementById('f-from').value||'G9';
+  if(newFrom===newTo){showToast('起站與迄站不能相同，請重新選擇');return;}
+  /* G17 自行車旅客限制（最終防線） */
+  if(isBike&&(newFrom==='G17'||newTo==='G17')){
+    showToast('G17 高鐵臺中站依公司規定無法設為自行車旅客起站或迄站');return;
+  }
+  if(isBike&&bikeDoor2+bikeDoor9===0){showToast('請至少填入 1 台自行車數量');return;}
+  /* 查詢迄站到站時間 */
+  const departStr=new Date(sel.value).getHours().toString().padStart(2,'0')+':'+new Date(sel.value).getMinutes().toString().padStart(2,'0');
+  const selDir=document.getElementById('f-dir').value;
+  const arrStr=getArrivalTime(newFrom,departStr,newTo,selDir);
+  /* 用迄站到站時間當倒數基準，若查不到則用起站發車時間 */
+  let arrivalTime=new Date(sel.value);
+  if(arrStr){
+    const[ah,am]=arrStr.split(':').map(Number);
+    arrivalTime=new Date(sel.value);
+    arrivalTime.setHours(ah<5?ah+24:ah,am,0,0);
+    /* 若深夜跨日（如00:xx），加一天 */
+    if(ah<5&&arrivalTime<new Date(sel.value))arrivalTime.setDate(arrivalTime.getDate()+1);
+  }
+  const evData={from:newFrom,to:newTo,dir:selDir,trainGroup:document.getElementById('f-train').value||'',gate:document.getElementById('f-gate').value,gender:document.getElementById('f-gender').value,type:newType,note,departTime:new Date(sel.value),arrivalTime:arrivalTime,departTimeStr:departStr,arrivalTimeStr:arrStr||'',createdBy:CU.username,station:newFrom,stationTo:newTo,createdAt:new Date(),isNotify:isNotifyEvent(newType),bikeDoor2,bikeDoor9};
+  await addEventToDb(evData);
+  addLog('create','新增事件 '+newFrom+'→'+newTo+' '+newType);
+  closeFormModal();
+}
+function tick(){
+  const now=new Date();
+  const cd=document.getElementById('clock-display');if(cd)cd.textContent=now.getFullYear()+'/'+(now.getMonth()+1).toString().padStart(2,'0')+'/'+now.getDate().toString().padStart(2,'0')+' '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+  events.forEach(ev=>{
+    const arrT=ev.arrivalTime||ev.departTime;const ms=arrT-now;
+    const el=document.getElementById('cd-'+ev.id),card=document.getElementById('card-'+ev.id);
+    const isNotify=isNotifyEvent(ev.type),isBike=ev.type==='自行車旅客';
+    /* 更新倒數顯示（僅引導型事件有 cd- 元素） */
+    if(el){
+      el.textContent=fmtCd(ms);
+      const cls=cdCls(ms);el.className='countdown-num '+cls;
+      if(card&&!isNotify)card.className='event-card '+(cls==='danger'?'danger':cls==='warn'?'warn':'normal');
+    }
+    const isMyArrival=CU&&CU.role!=='S'&&ev.to===CU.station;
+    /* 引導型事件：三階段提醒（3分/90秒/30秒/到站）*/
+    if(!isNotify){
+      if(ms<=180000&&ms>60000&&!wF.has(ev.id)){wF.add(ev.id);if(isMyArrival){showAlertCard(ev.id,'warn','⚠️','準備就緒提醒　距發車約 3 分鐘',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，已派員至指定地點</button>','warn');}}
+      if(ms<=90000&&ms>0&&!dF.has(ev.id)){dF.add(ev.id);if(isMyArrival){showAlertCard(ev.id,'danger','🚨','緊急確認　距發車不到 1 分 30 秒',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="closeAlertCard(this.dataset.id)"><i class="ti ti-check"></i> 確認，人員已在月台等候</button>','danger');}}
+      /* 30秒警示：僅播放一次音效，不顯示卡片 */
+      if(ms<=30000&&ms>0&&!thF.has(ev.id)){thF.add(ev.id);if(isMyArrival)playCS('thirty');}
+    }
+    /* 到站：引導型與通知型分別呈現不同彈窗 */
+    if(ms<=0&&!doF.has(ev.id)){
+      doF.add(ev.id);
+      if(isMyArrival){
+        if(isNotify){
+          showAlertCard(ev.id,'success',isBike?'🚲':'👥',
+            isBike?'自行車旅客到站　請回收感熱紙':'團體旅客到站　請回收感熱紙',
+            aInfo(ev),'',
+            '<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishNotifyOk(this.dataset.id)"><i class="ti ti-check"></i> 已回收感熱紙</button>',
+            isBike?'bike_arrive':'group_arrive');
+        } else {
+          showAlertCard(ev.id,'success','✅','列車已到站',aInfo(ev),'','<button class="btn btn-primary" data-id="'+ev.id+'" onclick="finishOk(this.dataset.id)"><i class="ti ti-check"></i> 已接到旅客</button><button class="btn" style="color:#E24B4A;border-color:#E24B4A;margin-left:8px" data-id="'+ev.id+'" onclick="finishFail(this.dataset.id)"><i class="ti ti-x"></i> 未接到旅客</button>','success');
+        }
+      }
+    }
+    /* 超時自動結案（發車超過 10 分鐘）：清除所有彈窗 */
+    if(ms<-600000&&!autoCloseF.has(ev.id)){
+      autoCloseF.add(ev.id);
+      closeAlertCard(ev.id);
+      const now2=new Date();
+      const mm2=(now2.getMonth()+1).toString().padStart(2,'0');
+      const dd2=now2.getDate().toString().padStart(2,'0');
+      const hh2=now2.getHours().toString().padStart(2,'0');
+      const mi2=now2.getMinutes().toString().padStart(2,'0');
+      addHistoryToDb({time:mm2+'/'+dd2+' '+hh2+':'+mi2,from:ev.from,to:ev.to,dir:ev.dir,type:ev.type,trainGroup:ev.trainGroup||'—',status:'超時結案',creator:ev.createdBy||'—',note:ev.note||'',reason:'發車超過10分鐘未確認，系統自動結案'});
+      deleteEventFromDb(ev.id);
+      setTimeout(loadHistory,1000);
+    }
+  });
+}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+/* ══ 時刻表版次管理 JS ══ */
+let TT_VERSIONS=[];
+let pendingDelVid=null,newTTFile=null,editTTFile=null;
+
+let ttUnsubscribe=null;
+function loadTTVersions(){
+  if(ttUnsubscribe)ttUnsubscribe();
+  const q=query(collection(db,'ttVersions'),orderBy('uploadDate','desc'));
+  ttUnsubscribe=onSnapshot(q,async snap=>{
+    if(snap.empty){
+      /* 第一次：寫入預設版本 */
+      const defaults=[
+        {name:'W05_06_09R_UP',type:'常態－平日',file:'平日尖峰6分鐘離峰9分鐘深夜20分鐘_W05_06_09R_UP.pdf',uploadDate:'2026/01/10',uploader:'系統管理員',start:'2026/01/10',end:'',status:'啟用中',note:'',createdAt:new Date()},
+        {name:'H05_0730_08_10R',type:'常態－假期首日',file:'假期首日尖峰7.5分_H05_0730_08_10R.pdf',uploadDate:'2026/01/10',uploader:'系統管理員',start:'2026/01/10',end:'',status:'啟用中',note:'',createdAt:new Date()},
+        {name:'H05_0930_10R',type:'常態－假期其餘日',file:'假期其餘日離峰9.5分_H05_0930_10R.pdf',uploadDate:'2026/01/10',uploader:'系統管理員',start:'2026/01/10',end:'',status:'啟用中',note:'',createdAt:new Date()},
+        {name:'MARATHON_20260315',type:'特殊',file:'馬拉松特殊時刻表_20260315.pdf',uploadDate:'2026/02/26',uploader:'楊貿勛',start:'2026/03/15',end:'2026/03/15',status:'已停用',note:'2026臺中城市半程馬拉松',createdAt:new Date()},
+      ];
+      TT_VERSIONS=[];
+      for(const d of defaults){const ref=await addDoc(collection(db,'ttVersions'),d);TT_VERSIONS.push({...d,id:ref.id});}
+    } else {
+      TT_VERSIONS=snap.docs.map(d=>({...d.data(),id:d.id}));
+    }
+    renderTTTable();
+    renderTTBanner();
+  },e=>console.error('時刻表監聽失敗',e));
+}
+
+async function saveTTToDb(tt){
+  const d={...tt};delete d.id;
+  try{
+    if(tt.id){await updateDoc(doc(db,'ttVersions',tt.id),d);}
+    else{const ref=await addDoc(collection(db,'ttVersions',),d);tt.id=ref.id;}
+  }catch(e){console.error('儲存時刻表失敗',e);}
+}
+
+async function deleteTTFromDb(id){
+  try{await deleteDoc(doc(db,'ttVersions',id));}catch(e){console.error(e);}
+}
+const TT_TYPE_BADGE={'常態－平日':'badge-green','常態－假期首日':'badge-amber','常態－假期其餘日':'badge-blue','特殊':'badge-gray'};
+function todayStrTT(){const n=new Date();return n.getFullYear()+'/'+(n.getMonth()+1).toString().padStart(2,'0')+'/'+n.getDate().toString().padStart(2,'0');}
+function renderTTTable(){
+  const tbody=document.getElementById('tt-tbody');if(!tbody)return;
+  tbody.innerHTML=TT_VERSIONS.map(v=>{
+    const fileCell='<span class="tt-file-link" data-file="'+v.file+'" style="cursor:pointer;color:#378ADD;text-decoration:underline" title="點擊預覽">'+v.file+'</span>';
+    return '<tr>'
+      +'<td style="font-weight:500">'+v.name+'</td>'
+      +'<td><span class="badge '+(TT_TYPE_BADGE[v.type]||'badge-gray')+'">'+v.type+'</span></td>'
+      +'<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+fileCell+'</td>'
+      +'<td>'+v.uploadDate+'</td>'
+      +'<td>'+v.uploader+'</td>'
+      +'<td style="font-size:11px">'+v.start+(v.end?' ~ '+v.end:' 起')+'</td>'
+      +'<td><span class="badge '+(v.status==='啟用中'?'badge-green':'badge-gray')+'">'+v.status+'</span></td>'
+      +'<td style="white-space:nowrap">'
+        +'<button class="btn btn-sm" data-action="edit" data-id="'+v.id+'"><i class="ti ti-edit"></i></button> '
+        +'<button class="btn btn-sm" data-action="del" data-id="'+v.id+'" style="color:#E24B4A;border-color:#E24B4A"><i class="ti ti-trash"></i></button>'
+      +'</td>'
+    +'</tr>';
+  }).join('');
+}
+function initTTTableEvents(){
+  const tbody=document.getElementById('tt-tbody');if(!tbody)return;
+  tbody.addEventListener('click',function(e){
+    const btn=e.target.closest('[data-action]');
+    if(btn){
+      const action=btn.dataset.action,id=btn.dataset.id;
+      if(action==='edit')openEditTT(id);
+      else if(action==='del')askDeleteTT(id);
+      return;
+    }
+    const fileLink=e.target.closest('.tt-file-link');
+    if(fileLink) openFilePreview(fileLink.dataset.file);
+  });
+}
+function openFilePreview(filename){
+  const mb=document.getElementById('modal-file-preview');
+  const title=document.getElementById('file-preview-title');
+  const body=document.getElementById('file-preview-body');
+  if(!mb)return;
+  if(title) title.textContent=filename;
+  if(body) body.innerHTML='<div style="text-align:center;padding:32px;color:var(--color-text-secondary)">'
+    +'<i class="ti ti-file" style="font-size:48px;display:block;margin-bottom:12px;color:var(--color-text-tertiary)"></i>'
+    +'<div style="font-size:13px;font-weight:500;margin-bottom:6px">'+filename+'</div>'
+    +'<div style="font-size:11px;color:var(--color-text-tertiary)">實際部署後將顯示檔案內容。<br>原型示範模式無法載入本地檔案。</div>'
+    +'</div>';
+  mb.classList.add('open');
+}
+function openNewTT(){
+  newTTFile=null;
+  ['new-tt-name','new-tt-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const ts=document.getElementById('new-tt-type');if(ts)ts.value='常態－平日';
+  const ss=document.getElementById('new-tt-status');if(ss)ss.value='啟用中';
+  const sd=document.getElementById('new-tt-start');if(sd)sd.value=new Date().toISOString().split('T')[0];
+  const ed=document.getElementById('new-tt-end');if(ed)ed.value='';
+  const fi=document.getElementById('new-tt-file-info');if(fi)fi.style.display='none';
+  const mb=document.getElementById('modal-new-tt');if(mb)mb.classList.add('open');
+}
+function handleNewTTFile(input){
+  const file=input.files[0];if(!file)return;newTTFile=file;
+  const el=document.getElementById('new-tt-file-info');if(el){el.style.display='flex';el.innerHTML='<i class="ti ti-check" style="color:#1D9E75"></i>'+file.name+' ('+Math.round(file.size/1024)+' KB)';}
+}
+async function submitNewTT(){
+  const nameEl=document.getElementById('new-tt-name');const name=(nameEl?nameEl.value:'').trim();
+  if(!name){showToast('請填寫版本名稱');return;}
+  if(!newTTFile){showToast('請選擇上傳檔案');return;}
+  const CUn=CU?CU.name:'系統管理員';
+  const ts=document.getElementById('new-tt-type');const ss=document.getElementById('new-tt-status');
+  const sd=document.getElementById('new-tt-start');const ed=document.getElementById('new-tt-end');
+  const nt=document.getElementById('new-tt-note');
+  const newTT={name,type:ts?ts.value:'常態－平日',file:newTTFile.name,uploadDate:todayStrTT(),uploader:CUn,start:(sd?sd.value:'').replace(/-/g,'/'),end:(ed?ed.value:'').replace(/-/g,'/'),status:ss?ss.value:'啟用中',note:nt?nt.value:'',createdAt:new Date()};
+  const ref=await addDoc(collection(db,'ttVersions'),newTT);
+  TT_VERSIONS.push({...newTT,id:ref.id});
+  const mb=document.getElementById('modal-new-tt');if(mb)mb.classList.remove('open');
+  renderTTTable();renderTTBanner();showToast('版本已上傳');addLog('create','新增時刻表版本：'+name);
+}
+function openEditTT(id){
+  const v=TT_VERSIONS.find(x=>x.id===id);if(!v)return;
+  editTTFile=null;
+  const ei=document.getElementById('edit-tt-id');if(ei)ei.value=id;
+  const en=document.getElementById('edit-tt-name');if(en)en.value=v.name;
+  const et=document.getElementById('edit-tt-type');if(et)et.value=v.type;
+  const es=document.getElementById('edit-tt-status');if(es)es.value=v.status;
+  const esd=document.getElementById('edit-tt-start');if(esd)esd.value=v.start.replace(/\//g,'-');
+  const eed=document.getElementById('edit-tt-end');if(eed)eed.value=v.end?v.end.replace(/\//g,'-'):'';
+  const eno=document.getElementById('edit-tt-note');if(eno)eno.value=v.note||'';
+  const ecf=document.getElementById('edit-tt-current-file');if(ecf)ecf.textContent=v.file;
+  const efi=document.getElementById('edit-tt-file-info');if(efi)efi.style.display='none';
+  const mb=document.getElementById('modal-edit-tt');if(mb)mb.classList.add('open');
+}
+function handleEditTTFile(input){
+  const file=input.files[0];if(!file)return;editTTFile=file;
+  const el=document.getElementById('edit-tt-file-info');if(el){el.style.display='flex';el.innerHTML='<i class="ti ti-check" style="color:#1D9E75"></i>'+file.name+' ('+Math.round(file.size/1024)+' KB)';}
+  const ecf=document.getElementById('edit-tt-current-file');if(ecf)ecf.textContent=file.name+' （新檔，儲存後覆蓋）';
+}
+async function submitEditTT(){
+  const eid=document.getElementById('edit-tt-id');const id=eid?eid.value:'';
+  const v=TT_VERSIONS.find(x=>x.id===id);if(!v)return;
+  const en=document.getElementById('edit-tt-name');if(en&&en.value.trim())v.name=en.value.trim();
+  const et=document.getElementById('edit-tt-type');if(et)v.type=et.value;
+  const es=document.getElementById('edit-tt-status');if(es)v.status=es.value;
+  const esd=document.getElementById('edit-tt-start');if(esd&&esd.value)v.start=esd.value.replace(/-/g,'/');
+  const eed=document.getElementById('edit-tt-end');if(eed)v.end=eed.value.replace(/-/g,'/');
+  const eno=document.getElementById('edit-tt-note');if(eno)v.note=eno.value;
+  if(editTTFile){v.file=editTTFile.name;v.uploadDate=todayStrTT();v.uploader=CU?CU.name:'系統管理員';}
+  await saveTTToDb(v);
+  const mb=document.getElementById('modal-edit-tt');if(mb)mb.classList.remove('open');
+  renderTTTable();renderTTBanner();showToast('版本已更新');addLog('edit','編輯時刻表版本：'+v.name);
+}
+function askDeleteTT(id){
+  const v=TT_VERSIONS.find(x=>x.id===id);if(!v)return;
+  pendingDelVid=id;
+  const dt=document.getElementById('del-tt-title');if(dt)dt.textContent='確認刪除「'+v.name+'」？';
+  const dd=document.getElementById('del-tt-desc');if(dd)dd.textContent='類型：'+v.type+'　此操作無法復原。';
+  const dw=document.getElementById('del-tt-warn');if(dw)dw.style.display=v.status==='啟用中'?'flex':'none';
+  const mb=document.getElementById('modal-del-tt');if(mb)mb.classList.add('open');
+}
+function confirmDeleteTT(){
+  if(!pendingDelVid)return;
+  deleteTTFromDb(pendingDelVid);
+  TT_VERSIONS=TT_VERSIONS.filter(x=>x.id!==pendingDelVid);
+  addLog('delete','刪除時刻表版本');
+  pendingDelVid=null;
+  const mb=document.getElementById('modal-del-tt');if(mb)mb.classList.remove('open');
+  renderTTTable();showToast('版本已刪除');
+}
+
+/* ══ 行事曆管理 JS ══ */
+const H26={'2026-1-1':'first','2026-2-14':'first','2026-2-15':'rest','2026-2-16':'rest','2026-2-17':'rest','2026-2-18':'rest','2026-2-19':'rest','2026-2-20':'rest','2026-2-21':'rest','2026-2-22':'rest','2026-2-27':'first','2026-2-28':'rest','2026-3-1':'rest','2026-4-3':'first','2026-4-4':'rest','2026-4-5':'rest','2026-4-6':'rest','2026-5-1':'first','2026-5-2':'rest','2026-5-3':'rest','2026-6-19':'first','2026-6-20':'rest','2026-6-21':'rest','2026-9-25':'first','2026-9-26':'rest','2026-9-27':'rest','2026-9-28':'rest','2026-10-9':'first','2026-10-10':'rest','2026-10-11':'rest','2026-10-24':'first','2026-10-25':'rest','2026-10-26':'rest','2026-12-25':'first','2026-12-26':'rest','2026-12-27':'rest'};
+const CAL_CSS={weekday:'background:#E6F1FB;border:0.5px solid #B5D4F4;color:#0C447C',first:'background:#FAEEDA;border:0.5px solid #FAC775;color:#633806',rest:'background:#EAF3DE;border:0.5px solid #C0DD97;color:#3B6D11',special:'background:#EEEDFE;border:0.5px solid #AFA9EC;color:#3C3489',warning:'background:#FCEBEB;border:0.5px solid #F09595;color:#791F1F'};
+const CAL_LABELS={weekday:'平日版',first:'假期首日版',rest:'假期其餘日版',warning:'需上傳'};
+const CAL_BADGE={weekday:'background:#E6F1FB;color:#0C447C;border:0.5px solid #B5D4F4',first:'background:#FAEEDA;color:#633806;border:0.5px solid #FAC775',rest:'background:#EAF3DE;color:#3B6D11;border:0.5px solid #C0DD97',special:'background:#EEEDFE;color:#3C3489;border:0.5px solid #AFA9EC',warning:'background:#FCEBEB;color:#791F1F;border:0.5px solid #F09595'};
+let calOvr={},calYear=new Date().getFullYear(),calMonth=new Date().getMonth()+1,calEditKey=null,calEditSel=null,calEditSvId=null;
+
+let calUnsubscribe=null;
+function loadCalOvr(){
+  if(calUnsubscribe)calUnsubscribe();
+  calUnsubscribe=onSnapshot(collection(db,'calOverrides'),snap=>{
+    calOvr={};
+    snap.docs.forEach(d=>{calOvr[d.id]={...d.data()};});
+    renderCalMain();
+  },e=>console.error('行事曆監聽失敗',e));
+}
+async function saveCalOvrToDb(key,val){
+  try{await setDoc(doc(db,'calOverrides',key),val);}catch(e){console.error('儲存行事曆失敗',e);}
+}
+const LOADED_YRS=[2026];
+function calKey(y,m,d){return y+'-'+m+'-'+d;}
+function getCalEntry(y,m,d){const k=calKey(y,m,d);if(calOvr[k])return calOvr[k];if(H26[k])return{type:H26[k]};const dow=new Date(y,m-1,d).getDay();if(dow===6)return{type:'first'};if(dow===0)return{type:'rest'};return{type:'weekday'};}
+function isCalDeleted(entry){if(entry.type!=='special')return false;const sv=TT_VERSIONS.find(x=>x.id===entry.svId&&x.type==='特殊');return !sv;}
+function renderCalMain(){
+  const grid=document.getElementById('cal-grid-main');if(!grid)return;
+  while(grid.children.length>7)grid.removeChild(grid.lastChild);
+  const lbl=document.getElementById('cal-month-label');if(lbl)lbl.textContent=calYear+'年 '+calMonth+'月';
+  const yw=document.getElementById('cal-year-warn');
+  if(yw){if(!LOADED_YRS.includes(calYear)){yw.style.display='flex';const t=document.getElementById('cal-year-warn-text');if(t)t.textContent=calYear+'年行事曆尚未載入，目前以週六＝假期首日、週日＝假期其餘日顯示，請匯入正確行事曆。';}else yw.style.display='none';}
+  const fd=new Date(calYear,calMonth-1,1).getDay();const days=new Date(calYear,calMonth,0).getDate();const td=new Date();
+  for(let i=0;i<fd;i++){const el=document.createElement('div');el.style.cssText='visibility:hidden';el.textContent='.';grid.appendChild(el);}
+  for(let d=1;d<=days;d++){
+    const entry=getCalEntry(calYear,calMonth,d);const isDel=isCalDeleted(entry);
+    const cssType=isDel?'warning':entry.type;
+    const label=isDel?'版本已刪除':entry.type==='special'?'特殊版':(CAL_LABELS[entry.type]||entry.type);
+    const el=document.createElement('div');
+    el.style.cssText='font-size:12px;text-align:center;padding:6px 3px 5px;border-radius:6px;cursor:pointer;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;'+CAL_CSS[cssType];
+    if(calYear===td.getFullYear()&&calMonth===td.getMonth()+1&&d===td.getDate())el.style.boxShadow='0 0 0 2px #378ADD';
+    el.innerHTML='<span style="font-size:13px;font-weight:500">'+d+'</span><span style="font-size:9px;font-weight:500;line-height:1.2;text-align:center">'+label+'</span>';
+    const y=calYear,m=calMonth;el.onclick=()=>openCalEdit(y,m,d);grid.appendChild(el);
+  }
+}
+function calPrevMonth(){calMonth--;if(calMonth<1){calMonth=12;calYear--;}renderCalMain();}
+function calNextMonth(){calMonth++;if(calMonth>12){calMonth=1;calYear++;}renderCalMain();}
+const CAL_DOW=['日','一','二','三','四','五','六'];
+function openCalEdit(y,m,d){
+  calEditKey=calKey(y,m,d);const entry=getCalEntry(y,m,d);const isDel=isCalDeleted(entry);
+  calEditSel=isDel?'warning':entry.type;calEditSvId=(!isDel&&entry.svId)?entry.svId:null;
+  const et=document.getElementById('cal-edit-title');if(et)et.textContent=y+'年 '+m+'月 '+d+'日（'+CAL_DOW[new Date(y,m-1,d).getDay()]+'）';
+  const bType=isDel?'warning':entry.type;
+  let bLabel;
+  if(isDel)bLabel='版本已刪除（'+(entry.svName||'')+')';
+  else if(entry.type==='special'){const sv=TT_VERSIONS.find(x=>x.id===entry.svId);bLabel=sv?sv.name:'特殊版';}
+  else bLabel=CAL_LABELS[entry.type]||entry.type;
+  const badge=document.getElementById('cal-edit-badge');
+  if(badge)badge.innerHTML='<span style="font-size:11px;color:var(--color-text-tertiary);margin-right:5px">目前版次：</span><span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;'+CAL_BADGE[bType]+'">'+bLabel+'</span>';
+  const dw=document.getElementById('cal-edit-del-warn');if(dw)dw.style.display=isDel?'flex':'none';
+  document.querySelectorAll('.cal-type-option').forEach(el=>el.classList.toggle('selected',el.dataset.type===calEditSel));
+  updateCalStep2();
+  const mb=document.getElementById('modal-cal-edit');if(mb)mb.classList.add('open');
+}
+function closeCalEdit(){const mb=document.getElementById('modal-cal-edit');if(mb)mb.classList.remove('open');calEditKey=null;calEditSel=null;calEditSvId=null;}
+function selCalType(el){document.querySelectorAll('.cal-type-option').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');calEditSel=el.dataset.type;if(calEditSel!=='special')calEditSvId=null;updateCalStep2();}
+function updateCalStep2(){
+  const s2s=document.getElementById('cal-step2-special');const s2w=document.getElementById('cal-step2-warning');
+  if(s2s)s2s.style.display=calEditSel==='special'?'block':'none';
+  if(s2w)s2w.style.display=calEditSel==='warning'?'block':'none';
+  if(calEditSel==='special')renderCalSpecialList();
+}
+function renderCalSpecialList(){
+  const list=document.getElementById('cal-special-list');if(!list)return;
+  const active=TT_VERSIONS.filter(v=>v.type==='特殊'&&v.status!=='已刪除');
+  if(active.length===0){list.innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary);padding:10px;text-align:center">目前無已上傳的特殊時刻表版本<br>請先至時刻表版次頁面上傳</div>';return;}
+  list.innerHTML='';
+  active.forEach(sv=>{
+    const el=document.createElement('div');
+    el.style.cssText='padding:9px 11px;border-radius:6px;border:0.5px solid '+(calEditSvId===sv.id?'#534AB7':'var(--color-border-tertiary)')+';cursor:pointer;margin-bottom:6px;font-size:12px;background:'+(calEditSvId===sv.id?'#EEEDFE':'var(--color-background-primary)')+';color:'+(calEditSvId===sv.id?'#3C3489':'var(--color-text-primary)');
+    el.innerHTML='<div style="font-weight:500"><i class="ti ti-file" style="font-size:12px;margin-right:4px"></i>'+sv.name+'</div><div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">'+sv.file+'　上傳：'+sv.uploadDate+'</div>';
+    el.onclick=()=>selCalSv(sv.id);
+    list.appendChild(el);
+  });
+}
+function selCalSv(svId){calEditSvId=svId;renderCalSpecialList();}
+function saveCalEdit(){
+  if(!calEditKey||!calEditSel)return;
+  if(calEditSel==='special'&&!calEditSvId){showToast('請選擇特殊時刻表版本');return;}
+  let entry;
+  if(calEditSel==='special'){const sv=TT_VERSIONS.find(x=>x.id===calEditSvId);entry={type:'special',svId:calEditSvId,svName:sv?sv.name:''};}
+  else entry={type:calEditSel};
+  calOvr[calEditKey]=entry;
+  saveCalOvrToDb(calEditKey,entry);
+  closeCalEdit();renderCalMain();showToast('時刻表版次已更新');
+}
+function openCalImport(){const mb=document.getElementById('modal-cal-import');if(mb)mb.classList.add('open');}
+function handleCalImportFile(input){
+  const file=input.files[0];if(!file)return;
+  const fn=document.getElementById('cal-import-file-name');if(fn){fn.style.display='block';fn.innerHTML='<i class="ti ti-check" style="color:#1D9E75"></i> '+file.name+' ('+Math.round(file.size/1024)+' KB)';}
+  const btn=document.getElementById('cal-import-btn');if(btn){btn.disabled=false;btn.style.opacity='';btn.style.cursor='';}
+}
+function doCalImport(){const mb=document.getElementById('modal-cal-import');if(mb)mb.classList.remove('open');showToast('行事曆已匯入，假日資料已更新');}
+
+/* ══ 手機版選單 ══ */
+function openMobileMenu(){
+  document.querySelector('.sidebar').classList.add('mobile-open');
+  const ov=document.querySelector('.mobile-overlay');
+  if(ov)ov.classList.add('active');
+  document.body.style.overflow='hidden';
+}
+function closeMobileMenu(){
+  document.querySelector('.sidebar').classList.remove('mobile-open');
+  const ov=document.querySelector('.mobile-overlay');
+  if(ov)ov.classList.remove('active');
+  document.body.style.overflow='';
+}
+
+/* ══ 事件篩選 ══ */
+let eventFilter='all';
+let eventFilterStation='all';
+let eventFilterDepart='G9';
+let eventFilterArrive='G9';
+
+function isMgmtUnit(station){return station==='北段辦'||station==='南段辦';}
+function makeStationSelect(currentVal,onChangeFn){
+  const SN={'G0':'G0 北屯總站','G3':'G3 舊社','G4':'G4 松竹','G5':'G5 四維國小','G6':'G6 文心崇德','G7':'G7 文心中清','G8':'G8 文華高中','G8a':'G8a 文心櫻花','G9':'G9 市政府','G10':'G10 水安宮','G10a':'G10a 文心森林公園','G11':'G11 南屯','G12':'G12 豐樂公園','G13':'G13 大慶','G14':'G14 九張犁','G15':'G15 九德','G16':'G16 烏日','G17':'G17 高鐵臺中站'};
+  const opts=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
+  const sel=document.createElement('select');
+  sel.style.cssText='font-family:var(--font-sans);font-size:12px;padding:4px 6px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;height:30px;max-width:140px';
+  opts.forEach(v=>{
+    const o=document.createElement('option');
+    o.value=v;o.textContent=SN[v];
+    if(v===currentVal)o.selected=true;
+    sel.appendChild(o);
+  });
+  sel.onchange=function(){onChangeFn(this.value);};
+  return sel;
+}
+
+function needsDropdownFilter(){
+  /* S級 或 管理單位帳號 → 需要下拉選站 */
+  if(!CU) return false;
+  return CU.role==='S'||isMgmtUnit(CU.station);
+}
+function buildEventFilter(){
+  const wrap=document.getElementById('event-filter-wrap');if(!wrap||!CU)return;
+  wrap.innerHTML='';
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;align-items:center;gap:0;flex-wrap:nowrap';
+
+  if(needsDropdownFilter()){
+    /* S級/管理單位：[全線] [本站（離站）▼] [本站（到站）▼] 同一列 */
+    /* 全線按鈕 */
+    const bAll=document.createElement('button');
+    bAll.textContent='全線';
+    const allActive=eventFilter==='all';
+    bAll.style.cssText='padding:5px 11px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-right:none;border-radius:var(--border-radius-md) 0 0 var(--border-radius-md);background:'+(allActive?'#378ADD':'var(--color-background-primary)')+';color:'+(allActive?'#fff':'var(--color-text-primary)')+';cursor:pointer;font-family:var(--font-sans);white-space:nowrap;height:30px';
+    bAll.onclick=()=>setEventFilter('all');
+    row.appendChild(bAll);
+
+    /* 本站（離站）容器 */
+    const wrapD=document.createElement('div');
+    const departActive=eventFilter==='depart';
+    wrapD.style.cssText='display:flex;align-items:center;border:0.5px solid '+(departActive?'#378ADD':'var(--color-border-secondary)')+';border-right:none;background:'+(departActive?'#EBF4FF':'var(--color-background-primary)')+';height:30px';
+    const lblD=document.createElement('span');
+    lblD.textContent='離站';
+    lblD.style.cssText='font-size:12px;padding:0 6px;color:'+(departActive?'#185FA5':'var(--color-text-secondary)')+';white-space:nowrap;cursor:pointer';
+    lblD.onclick=()=>setEventFilter('depart');
+    wrapD.appendChild(lblD);
+    const selD=makeStationSelect(eventFilterDepart||'G9',function(v){eventFilterDepart=v;setEventFilter('depart');});
+    selD.style.cssText='font-family:var(--font-sans);font-size:11px;padding:0 4px;border:none;background:transparent;color:var(--color-text-primary);cursor:pointer;height:28px;max-width:130px';
+    
+    wrapD.appendChild(selD);
+    row.appendChild(wrapD);
+
+    /* 本站（到站）容器 */
+    const wrapA=document.createElement('div');
+    const arriveActive=eventFilter==='arrive';
+    wrapA.style.cssText='display:flex;align-items:center;border:0.5px solid '+(arriveActive?'#378ADD':'var(--color-border-secondary)')+';border-radius:0 var(--border-radius-md) var(--border-radius-md) 0;background:'+(arriveActive?'#EBF4FF':'var(--color-background-primary)')+';height:30px';
+    const lblA=document.createElement('span');
+    lblA.textContent='到站';
+    lblA.style.cssText='font-size:12px;padding:0 6px;color:'+(arriveActive?'#185FA5':'var(--color-text-secondary)')+';white-space:nowrap;cursor:pointer';
+    lblA.onclick=()=>setEventFilter('arrive');
+    wrapA.appendChild(lblA);
+    const selA=makeStationSelect(eventFilterArrive||'G9',function(v){eventFilterArrive=v;setEventFilter('arrive');});
+    selA.style.cssText='font-family:var(--font-sans);font-size:11px;padding:0 4px;border:none;background:transparent;color:var(--color-text-primary);cursor:pointer;height:28px;max-width:130px';
+    
+    wrapA.appendChild(selA);
+    row.appendChild(wrapA);
+
+  } else {
+    /* A/B 級一般車站：[本站（離站）][本站（到站）][全線] 三個按鈕同一列 */
+    row.style.cssText='display:flex;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);overflow:hidden;font-size:12px';
+    [['depart','本站（離站）'],['arrive','本站（到站）'],['all','全線']].forEach(([mode,label])=>{
+      const isThis=eventFilter===mode;
+      const b=document.createElement('button');
+      b.textContent=label;
+      b.style.cssText='padding:5px 10px;background:'+(isThis?'#378ADD':'var(--color-background-primary)')+';color:'+(isThis?'#fff':'var(--color-text-secondary)')+';border:none;border-right:0.5px solid var(--color-border-secondary);cursor:pointer;font-family:var(--font-sans);white-space:nowrap';
+      b.onclick=()=>setEventFilter(mode);
+      row.appendChild(b);
+    });
+  }
+  wrap.appendChild(row);
+}
+
+function setSFilter(val){
+  eventFilterStation=val;
+  console.log('篩選站碼:',val,'事件列表:',events.map(e=>({from:e.from,to:e.to,station:e.station})));
+  renderEvents();
+}
+function setEventFilter(mode){
+  eventFilter=mode;
+  buildEventFilter();
+  renderEvents();
+}
+function getFilteredEvents(){
+  if(!CU) return events;
+  const mgmt=isMgmtUnit(CU.station);
+  const myStation=CU.station;
+  /* 途經站自行車事件：全線模式顯示（方便識別），本站模式才排除至 banner */
+  const excludeTransit=ev=>!(ev.type==='自行車旅客'&&getIntermediateStations(ev.from,ev.to).includes(myStation));
+  if(mgmt){
+    if(eventFilter==='all') return events; /* 全線：全部顯示 */
+    if(eventFilter==='depart') return events.filter(ev=>ev.from===eventFilterDepart&&excludeTransit(ev));
+    if(eventFilter==='arrive') return events.filter(ev=>ev.to===eventFilterArrive&&excludeTransit(ev));
+    return events.filter(excludeTransit);
+  }
+  if(eventFilter==='all') return events; /* 全線：含途經自行車事件一起顯示 */
+  if(eventFilter==='depart') return events.filter(ev=>ev.from===myStation&&excludeTransit(ev));
+  if(eventFilter==='arrive') return events.filter(ev=>ev.to===myStation&&excludeTransit(ev));
+  return events.filter(excludeTransit);
+}
+
+
+/* ══ 手機版選單 ══ */
+
+/* ── 將所有需要 HTML inline handler 呼叫的函式暴露到 window（因為是 module script）── */
+/* ── 自動暴露所有函式到 window（module script 需要）── */
+Object.assign(window,{
+  aInfo, addEventToDb, addHistoryToDb, addLog, applyNavRole, applyTT, askDeleteTT, autoDir,
+  batchDeleteAcc, batchDeleteHistory, batchResetDevice, bindLoginEvents, bip, buildDangerUtter, buildEventFilter, buildNote,
+  buildSound, calKey, calNextMonth, calPrevMonth, calcDir, canSeeChatMsg, cdCls, clearAccSelection,
+  clearHistSelection, clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeEmojiPickerOutside, closeFormModal,
+  closeMobileMenu, closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc,
+  deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
+  downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
+  filterChatLog, filterLog, finishFail, finishNotifyOk, finishOk, fmt, fmtCd, ga,
+  getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents,
+  getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage, handleCalImportFile,
+  handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent, isCalDeleted, isMgmtUnit,
+  isNotifyEvent, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory, loadLogs, loadMoreChatLog,
+  loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter, nowStr,
+  nowStr2, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange, onTypeChange, openAccEdit,
+  openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT, openFilePreview, openHistoryEdit,
+  openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote, playCS, playCurrentSoundCS,
+  playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList,
+  renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents, renderHistory, renderLog,
+  renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable, renderTransitBanner, resetChatLogFilter,
+  resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb,
+  saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType, selSoundPreset, sendChatMessage,
+  setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol,
+  speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice,
+  speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop, submitEditTT, submitEvent,
+  submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall,
+  toggleEmojiPicker, toggleLoginEye, togglePwd, ttTimeToMin, updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2,
+  updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol, updateTrains, uploadLogo
+});
+
+
+
+/* ── 啟動：載入帳號後才顯示登入頁，並嘗試 session 恢復 ── */
+(async()=>{
+  const btn=document.getElementById('l-btn');
+  if(btn){btn.disabled=true;btn.textContent='載入中…';}
+  await loadAccounts();
+  if(btn){btn.disabled=false;btn.textContent='登入';}
+  /* 嘗試 session 恢復（頁面重整自動登入）*/
+  const savedUser=sessionStorage.getItem('tmrt_session_user');
+  if(savedUser){
+    const user=ACCOUNTS.find(u=>u.username===savedUser&&u.status==='啟用');
+    if(user){
+      const localToken=localStorage.getItem('tmrt_dt_'+user.username);
+      const tokenOk=user.role==='S'||!user.deviceToken||(localToken&&localToken===user.deviceToken);
+      if(tokenOk){
+        CU=user;
+        loginSuccess(user.lastLogin||'—',user.lastLoginIp||'—');
+        return;
+      }
+    }
+    sessionStorage.removeItem('tmrt_session_user');
+  }
+})();
