@@ -1503,20 +1503,45 @@ function onTypeChange(){
   const w=document.getElementById('bike-count-wrap');
   const gate=document.getElementById('f-gate');
   const gender=document.getElementById('f-gender');
+  const fFrom=document.getElementById('f-from');
+  const fTo=document.getElementById('f-to');
   const isNotifyType=t==='自行車旅客'||t==='團體旅客';
-  if(w)w.style.display=t==='自行車旅客'?'block':'none';
+  const isBikeType=t==='自行車旅客';
+  if(w)w.style.display=isBikeType?'block':'none';
   /* 自行車旅客固定使用 02/09 車門，停用一般車門選擇 */
   if(gate){
-    gate.disabled=t==='自行車旅客';
-    gate.style.opacity=t==='自行車旅客'?'0.35':'1';
-    gate.style.cursor=t==='自行車旅客'?'not-allowed':'';
+    gate.disabled=isBikeType;
+    gate.style.opacity=isBikeType?'0.35':'1';
+    gate.style.cursor=isBikeType?'not-allowed':'';
   }
   /* 自行車/團體旅客性別非必填，預設清空並停用 */
   if(gender){
     if(isNotifyType){gender.value='';gender.disabled=true;gender.style.opacity='0.35';gender.style.cursor='not-allowed';}
     else{gender.disabled=false;gender.style.opacity='1';gender.style.cursor='';if(!gender.value)gender.value='男性';}
   }
-  if(t==='自行車旅客') updateBikeCapacity();
+  /* G17 自行車旅客限制：公司規定，高鐵臺中站禁止作為自行車起訖站 */
+  if(fFrom){
+    const g17From=fFrom.querySelector('option[value="G17"]');
+    if(g17From){
+      g17From.disabled=isBikeType;
+      if(isBikeType&&fFrom.value==='G17'){fFrom.value='G0';autoDir();}
+    }
+  }
+  if(fTo){
+    const g17To=fTo.querySelector('option[value="G17"]');
+    if(g17To){
+      g17To.disabled=isBikeType;
+      if(isBikeType&&fTo.value==='G17'){fTo.value='G0';updateTrains();}
+    }
+  }
+  /* 若 B 級帳號本身就在 G17，禁止新增自行車引導事件 */
+  if(isBikeType&&fFrom&&fFrom.disabled&&fFrom.value==='G17'){
+    showToast('G17 高鐵臺中站依公司規定無法設為自行車旅客起站或迄站');
+    document.getElementById('f-type').value='視障旅客';
+    if(w)w.style.display='none';
+    return;
+  }
+  if(isBikeType) updateBikeCapacity();
   else{const ci=document.getElementById('bike-cap-info');if(ci)ci.style.display='none';}
 }
 function updateBikeCapacity(){
@@ -2777,6 +2802,11 @@ function openModal(){
   const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
   const gate=document.getElementById('f-gate');
   if(gate){gate.disabled=false;gate.style.opacity='1';gate.style.cursor='';gate.value='01 車門';}
+  /* 恢復 G17 選項（上次若選了自行車旅客會被停用） */
+  ['f-from','f-to'].forEach(id=>{const el=document.getElementById(id);if(el){const opt=el.querySelector('option[value="G17"]');if(opt)opt.disabled=false;}});
+  /* 恢復性別欄位 */
+  const genderEl=document.getElementById('f-gender');
+  if(genderEl){genderEl.disabled=false;genderEl.style.opacity='1';genderEl.style.cursor='';genderEl.value='男性';}
   document.getElementById('modal-form').classList.add('open');}
 function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;document.getElementById('f-edit-id').value=id;document.getElementById('mf-title').textContent='編輯引導事件';document.getElementById('mf-submit').textContent='儲存變更';document.getElementById('train-sel-wrap').style.display='none';document.getElementById('f-from').value=ev.from;document.getElementById('f-to').value=ev.to;document.getElementById('f-dir').value=ev.dir;document.getElementById('dir-display').textContent=ev.dir==='down'?'↓ 下行（往高鐵臺中站）':'↑ 上行（往北屯總站）';document.getElementById('f-train').value=ev.trainGroup||'';document.getElementById('f-type').value=ev.type;document.getElementById('f-gate').value=ev.gate;document.getElementById('f-gender').value=ev.gender;parseNote(ev.note||'');
   const bcw=document.getElementById('bike-count-wrap');if(bcw)bcw.style.display=ev.type==='自行車旅客'?'block':'none';
@@ -2793,6 +2823,11 @@ function closeFormModal(){
   const bci=document.getElementById('bike-cap-info');if(bci)bci.style.display='none';
   const b2=document.getElementById('f-bike2');if(b2)b2.value='0';
   const b9=document.getElementById('f-bike9');if(b9)b9.value='0';
+  /* 恢復 G17 選項可用（自行車旅客選取時被停用） */
+  ['f-from','f-to'].forEach(id=>{const el=document.getElementById(id);if(el){const opt=el.querySelector('option[value="G17"]');if(opt)opt.disabled=false;}});
+  /* 恢復性別欄位 */
+  const gender=document.getElementById('f-gender');
+  if(gender){gender.disabled=false;gender.style.opacity='1';gender.style.cursor='';}
 }
 async function submitEvent(){
   const eid=document.getElementById('f-edit-id').value,note=buildNote();
@@ -2809,6 +2844,10 @@ async function submitEvent(){
   const newTo=document.getElementById('f-to').value||'G13';
   const newFrom=document.getElementById('f-from').value||'G9';
   if(newFrom===newTo){showToast('起站與迄站不能相同，請重新選擇');return;}
+  /* G17 自行車旅客限制（最終防線，防止繞過 UI） */
+  if(newType==='自行車旅客'&&(newFrom==='G17'||newTo==='G17')){
+    showToast('G17 高鐵臺中站依公司規定無法設為自行車旅客起站或迄站');return;
+  }
   const newType=document.getElementById('f-type').value;
   const isBike=newType==='自行車旅客';
   const bikeDoor2=isBike?parseInt((document.getElementById('f-bike2')||{}).value||'0'):0;
