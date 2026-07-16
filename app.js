@@ -1,5 +1,5 @@
 /* ── Firebase 初始化 ── */
-const BUILD = 4; /* 系統版本：每次推送前遞增 */
+const BUILD = 5; /* 系統版本：每次推送前遞增 */
 document.addEventListener('DOMContentLoaded',()=>{const el=document.getElementById('build-num');if(el)el.textContent=BUILD;});
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -1449,7 +1449,7 @@ function renderChatLog(){
   document.getElementById('chatlog-body').innerHTML=pageData.map(m=>{
     const timeStr=m.createdAt?(m.createdAt.getFullYear()+'/'+(m.createdAt.getMonth()+1).toString().padStart(2,'0')+'/'+m.createdAt.getDate().toString().padStart(2,'0')+' '+m.createdAt.getHours().toString().padStart(2,'0')+':'+m.createdAt.getMinutes().toString().padStart(2,'0')):'—';
     const targetLabel=(m.to==='all'||(Array.isArray(m.to)&&m.to.includes('all')))?'全線廣播':(Array.isArray(m.to)?m.to.join('、'):'—');
-    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td></tr>';
+    return '<tr><td style="font-size:11px;white-space:nowrap;font-family:monospace">'+timeStr+'</td><td style="font-size:11px;font-weight:500">'+esc(m.fromName||m.from)+'</td><td style="font-size:11px">'+esc(targetLabel)+'</td><td style="font-size:12px;color:var(--color-text-secondary);max-width:300px">'+esc(m.content)+'</td><td><button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A;padding:2px 6px" data-id="'+m.id+'" onclick="deleteChatMsg(this.dataset.id)" title="刪除此訊息"><i class="ti ti-trash" style="font-size:12px"></i></button></td></tr>';
   }).join('');
   document.getElementById('chatlog-count').textContent='共 '+chatLogFiltered.length+' 筆記錄'+(totalPages>1?'　第 '+chatLogPage+' / '+totalPages+' 頁':'');
   renderChatLogPagination(totalPages);
@@ -1472,6 +1472,17 @@ function renderChatLogPagination(totalPages){
   w.innerHTML=html;
 }
 function goChatLogPage(p){chatLogPage=p;renderChatLog();}
+async function deleteChatMsg(id){
+  if(!CU||CU.role!=='S')return;
+  if(!confirm('確定要刪除這則訊息嗎？此操作無法復原。'))return;
+  try{
+    await deleteDoc(doc(db,'chatMessages',id));
+    addLog('edit','刪除對話訊息 id:'+id);
+    chatLogAll=chatLogAll.filter(m=>m.id!==id);
+    filterChatLog();
+    showToast('訊息已刪除');
+  }catch(e){showToast('刪除失敗：'+e.message);}
+}
 
 let soundUnsubscribe=null;
 function loadSoundSettings(){
@@ -2566,11 +2577,11 @@ function getFilteredEvents(){
 /* ── 自動暴露所有函式到 window（module script 需要）── */
 Object.assign(window,{
   aInfo, addEventToDb, addHistoryToDb, addLog, applyNavRole, applyTT, askDeleteTT, autoDir,
-  batchDeleteAcc, batchDeleteHistory, batchResetDevice, bindLoginEvents, bip, buildDangerUtter, buildEventFilter, buildNote,
-  buildSound, calKey, calNextMonth, calPrevMonth, calcDir, canSeeChatMsg, cdCls, clearAccSelection,
-  clearHistSelection, clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeEmojiPickerOutside, closeFormModal,
-  closeMobileMenu, closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc,
-  deleteAccFromDb, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
+  batchDeleteAcc, batchDeleteHistory, batchResetDevice, bip, buildDangerUtter, buildEventFilter, buildNote, buildSound,
+  calKey, calNextMonth, calPrevMonth, calcDir, canSeeChatMsg, cdCls, clearAccSelection, clearHistSelection,
+  clearLoginErr, clearNF, closeAlertCard, closeCalEdit, closeChatTargetModal, closeEmojiPickerOutside, closeFormModal, closeMobileMenu,
+  closeSoundReplace, confirmChatTarget, confirmDeleteTT, confirmSoundReplace, csvEscape, delEvent, deleteAcc, deleteAccFromDb,
+  deleteChatMsg, deleteEventFromDb, deleteHistory, deleteHistoryFromDb, deleteTTFromDb, doCalImport, doLogin, doLogout,
   downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog, exportMonthReport,
   filterChatLog, filterLog, finishFail, finishNotifyOk, finishOk, fmt, fmtCd, ga,
   getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound, getFilteredEvents,
