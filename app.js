@@ -1,5 +1,5 @@
 /* ── Firebase 初始化 ── */
-const BUILD = 7; /* 系統版本：每次推送前遞增 */
+const BUILD = 8; /* 系統版本：每次推送前遞增 */
 document.addEventListener('DOMContentLoaded',()=>{const el=document.getElementById('build-num');if(el)el.textContent=BUILD;});
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -726,6 +726,20 @@ function exportMonthReport(){
 /* ── 通知型事件輔助 ── */
 function isNotifyEvent(type){return NOTIFY_TYPES.includes(type);}
 function isBikeEvent(type){return type==='自行車旅客';}
+function isSameTrain(evA,evB){
+  /* 判斷兩個事件是否搭乘同一班列車，使用時刻表反查，不依賴迄站是否相同 */
+  if(!evA||!evB)return false;
+  if(evA.dir!==evB.dir)return false;
+  if(!evA.departTimeStr||!evB.departTimeStr)return false;
+  if(evA.from===evB.from)return evA.departTimeStr===evB.departTimeStr;
+  /* 不同起站：計算 evA 的班次抵達 evB.from 的時間，與 evB 的發車時間比對 */
+  const t1=getArrivalTime(evA.from,evA.departTimeStr,evB.from,evA.dir);
+  if(t1)return t1===evB.departTimeStr;
+  /* 反向比對：計算 evB 的班次抵達 evA.from 的時間，與 evA 的發車時間比對 */
+  const t2=getArrivalTime(evB.from,evB.departTimeStr,evA.from,evB.dir);
+  if(t2)return t2===evA.departTimeStr;
+  return false;
+}
 function getIntermediateStations(from,to){
   const fi=STATION_ORDER_LIST.indexOf(from);
   const ti=STATION_ORDER_LIST.indexOf(to);
@@ -796,18 +810,16 @@ function updateBikeCapacity(){
   }
   const selTime=new Date(sel.value).getTime();
   const dir=(document.getElementById('f-dir')||{}).value||'down';
-  const selArrival=sel.dataset.arr||''; /* 所選班次抵達迄站的時間 */
+  const selArrival=sel.dataset.arr||'';
   const selTo=document.getElementById('f-to').value||'';
-  /* 同班次判斷：優先用「迄站相同 + 到站時間相同」（不同起站但同一班車的情境）
-     若缺乏資料則回退到起站發車時間 ±5 分鐘 */
+  const selFromStation=document.getElementById('f-from').value||'';
+  const selDepartStr=sel.dataset.depart||'';
+  /* 用 isSameTrain 識別同班次（跨起站、不同迄站皆可正確比對） */
+  const selRef={from:selFromStation,departTimeStr:selDepartStr,dir:dir};
   const sameTrain=events.filter(ev=>{
     if(ev.id===editId)return false;
     if(ev.type!=='自行車旅客')return false;
-    if(ev.dir!==dir)return false;
-    if(selArrival&&selTo&&ev.arrivalTimeStr&&ev.to){
-      return ev.to===selTo&&ev.arrivalTimeStr===selArrival;
-    }
-    return Math.abs(ev.departTime.getTime()-selTime)<300000;
+    return isSameTrain(ev,selRef);
   });
   const usedD2=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor2||0),0);
   const usedD9=sameTrain.reduce((s,ev)=>s+(ev.bikeDoor9||0),0);
@@ -883,7 +895,7 @@ function renderTransitBanner(){
   wrap.innerHTML=transitEvs.sort((a,b)=>a.departTime-b.departTime).map(ev=>{
     const total=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
     /* 同班次所有自行車事件累計（同迄站＋同到站時間＋同方向） */
-    const trainTotal=events.filter(e=>e.type==='自行車旅客'&&e.to===ev.to&&e.arrivalTimeStr===ev.arrivalTimeStr&&e.dir===ev.dir).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0);
+    const trainTotal=events.filter(e=>e.type==='自行車旅客'&&isSameTrain(ev,e)).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0);
     const remain=Math.max(0,4-trainTotal);
     const timeStr=ev.arrivalTimeStr||fmt(ev.departTime);
     return '<div style="display:flex;align-items:center;gap:8px;background:#E0F3F7;border:1px dashed #9AD8E8;border-radius:8px;padding:8px 14px;font-size:12px">'+
@@ -1837,7 +1849,7 @@ function renderEvents(){
     const clsArr=isNotify?'normal':(cdCls(msArr)==='danger'?'danger':cdCls(msArr)==='warn'?'warn':'normal');
     const bikeTotal=(ev.bikeDoor2||0)+(ev.bikeDoor9||0);
     /* 同班次所有自行車事件的累計台數（同迄站＋同到站時間） */
-    const trainTotalBikes=isBike?events.filter(e=>e.type==='自行車旅客'&&e.to===ev.to&&e.arrivalTimeStr===ev.arrivalTimeStr&&e.dir===ev.dir).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0):0;
+    const trainTotalBikes=isBike?events.filter(e=>e.type==='自行車旅客'&&isSameTrain(ev,e)).reduce((s,e)=>s+(e.bikeDoor2||0)+(e.bikeDoor9||0),0):0;
     const bikeRemain=Math.max(0,4-trainTotalBikes);
     const notifyColor=isBike?'#0E667A':'#6B3FA0';
     const notifyBg=isBike?'#E0F3F7':'#F0EAFA';
@@ -2618,23 +2630,23 @@ Object.assign(window,{
   ga, getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound,
   getFilteredEvents, getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage,
   handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent, isCalDeleted,
-  isMgmtUnit, isNotifyEvent, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory, loadLogs,
-  loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect, needsDropdownFilter,
-  nowStr, nowStr2, onChatLogChkChange, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange, onTTChange,
-  onTypeChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal, openEditTT,
-  openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal, parseNote,
-  playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent, renderAccounts,
-  renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker, renderEvents,
-  renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner, renderTTTable,
-  renderTransitBanner, resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb, saveAllSound,
-  saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv, selCalType,
-  selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast, sortedAccountsList,
-  speakArrivalNotice, speakArrivalNoticeVol, speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard, speakDangerOnce,
-  speakDangerPreview, speakGroupArriveNotice, speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock, stopCardLoop,
-  submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT, toggleAllAcc,
-  toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, toggleSelectAllChatLog, ttTimeToMin, updateAccBatchBar,
-  updateAccInDb, updateBikeCapacity, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd, updateSoundVol,
-  updateTrains, uploadLogo
+  isMgmtUnit, isNotifyEvent, isSameTrain, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory,
+  loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect,
+  needsDropdownFilter, nowStr, nowStr2, onChatLogChkChange, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange,
+  onTTChange, onTypeChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal,
+  openEditTT, openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal,
+  parseNote, playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent,
+  renderAccounts, renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker,
+  renderEvents, renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner,
+  renderTTTable, renderTransitBanner, resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb,
+  saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv,
+  selCalType, selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast,
+  sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol, speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard,
+  speakDangerOnce, speakDangerPreview, speakGroupArriveNotice, speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock,
+  stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT,
+  toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, toggleSelectAllChatLog, ttTimeToMin,
+  updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd,
+  updateSoundVol, updateTrains, uploadLogo
 });
 
 
