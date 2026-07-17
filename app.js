@@ -478,6 +478,8 @@ async function executeRestore(){await saveSuspendStatus(false,'');addLog('edit',
 
 /* ── 歷史查詢 ── */
 let historyData=[];
+let histPage=1;
+const HIST_PER_PAGE=20;
 
 async function addHistoryToDb(record){
   try{
@@ -509,7 +511,11 @@ function loadHistory(){
 }
 function renderHistory(){
   const tbody=document.getElementById('history-body');if(!tbody)return;
-  tbody.innerHTML=historyData.map(r=>`<tr>
+  const total=historyData.length;
+  const totalPages=Math.max(1,Math.ceil(total/HIST_PER_PAGE));
+  if(histPage>totalPages)histPage=totalPages;
+  const pageData=historyData.slice((histPage-1)*HIST_PER_PAGE,histPage*HIST_PER_PAGE);
+  tbody.innerHTML=pageData.map(r=>`<tr>
     <td style="width:32px"><input type="checkbox" class="hist-chk" data-id="${r.id}" style="cursor:pointer" onclick="updateHistBatchBar()"></td>
     <td>${r.time}</td>
     <td>${r.from}→${r.to} ${r.dir==='down'?'下行':'上行'}</td>
@@ -523,8 +529,26 @@ function renderHistory(){
       <button class="btn btn-sm" style="color:#E24B4A;border-color:#E24B4A;margin-left:3px" onclick="deleteHistory('${r.id}')"><i class="ti ti-trash"></i></button>
     </td>
   </tr>`).join('');
+  /* 分頁控制 */
+  const cnt=document.getElementById('history-count');
+  const pag=document.getElementById('history-pagination');
+  if(cnt)cnt.textContent=`共 ${total} 筆・第 ${histPage} / ${totalPages} 頁`;
+  if(pag){
+    const btns=[];
+    if(histPage>1)btns.push(`<button class="btn btn-sm" onclick="goHistPage(${histPage-1})">‹</button>`);
+    for(let i=1;i<=totalPages;i++){
+      if(i===1||i===totalPages||Math.abs(i-histPage)<=1){
+        btns.push(`<button class="btn btn-sm${i===histPage?' btn-primary':''}" onclick="goHistPage(${i})">${i}</button>`);
+      } else if(Math.abs(i-histPage)===2){
+        btns.push('<span style="font-size:12px;padding:0 2px">…</span>');
+      }
+    }
+    if(histPage<totalPages)btns.push(`<button class="btn btn-sm" onclick="goHistPage(${histPage+1})">›</button>`);
+    pag.innerHTML=btns.join('');
+  }
   updateHistBatchBar();
 }
+function goHistPage(p){histPage=p;renderHistory();}
 function openHistoryEdit(id){const r=historyData.find(x=>x.id===id);if(!r)return;document.getElementById('he-id').value=id;document.getElementById('he-route-display').textContent=r.from+' '+(SN[r.from]||'')+' → '+r.to+' '+(SN[r.to]||'')+' ('+(r.dir==='down'?'下行':'上行')+') · '+r.type;document.getElementById('he-status').value=r.status;document.getElementById('he-reason').value=r.reason||'';document.getElementById('he-note').value=r.note||'';document.getElementById('he-reason-wrap').style.display=r.status==='未完成'?'flex':'none';document.getElementById('modal-history-edit').classList.add('open');}
 function saveHistoryEdit(){const id=document.getElementById('he-id').value;const r=historyData.find(x=>x.id===id);if(!r)return;r.status=document.getElementById('he-status').value;r.reason=document.getElementById('he-reason').value;r.note=document.getElementById('he-note').value;updateHistoryInDb(id,{status:r.status,reason:r.reason,note:r.note});document.getElementById('modal-history-edit').classList.remove('open');renderHistory();showToast('歷史紀錄已更新');}
 function deleteHistory(id){if(confirm('確定刪除此筆歷史紀錄？')){deleteHistoryFromDb(id);historyData=historyData.filter(x=>x.id!==id);renderHistory();showToast('已刪除');}}
@@ -1632,6 +1656,7 @@ function fmtCd(ms){if(ms<=0)return'00:00';const s=Math.floor(ms/1000),m=Math.flo
 function cdCls(ms){if(ms<=90000)return'danger';if(ms<=180000)return'warn';return'normal';}
 const NOTIFY_TYPES=['自行車旅客','團體旅客'];
 const STATION_ORDER_LIST=['G0','G3','G4','G5','G6','G7','G8','G8a','G9','G10','G10a','G11','G12','G13','G14','G15','G16','G17'];
+
 const TC={'視障旅客':'tag-red','年長旅客':'tag-amber','輪椅旅客（攜帶輪椅）':'tag-green','輪椅旅客（協助駐留）':'tag-green','自行車旅客':'tag-teal','團體旅客':'tag-purple','其他':'tag-gray'};
 let events=[];
 let nextId=1;
@@ -2628,25 +2653,25 @@ Object.assign(window,{
   doLogout, downloadCsv, esc, executeRestore, executeSuspend, exportChatLog, exportCustomReport, exportLog,
   exportMonthReport, filterChatLog, filterLog, finishFail, finishNotifyOk, finishOk, fmt, fmtCd,
   ga, getArrivalTime, getCalEntry, getChatWallMaxWidth, getCurrentTimetable, getDefaultStation, getDefaultToStation, getEmojiPickerLeftBound,
-  getFilteredEvents, getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goLogPage,
-  handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent, isCalDeleted,
-  isMgmtUnit, isNotifyEvent, isSameTrain, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages, loadHistory,
-  loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess, makeStationSelect,
-  needsDropdownFilter, nowStr, nowStr2, onChatLogChkChange, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange, onSReasonChange,
-  onTTChange, onTypeChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal, openEditModal,
-  openEditTT, openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace, openSuspendModal,
-  parseNote, playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker, refreshSoundCurrent,
-  renderAccounts, renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages, renderEmojiPicker,
-  renderEvents, renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay, renderTTBanner,
-  renderTTTable, renderTransitBanner, resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc, saveAccToDb,
-  saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb, selCalSv,
-  selCalType, selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage, showToast,
-  sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol, speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice, speakDangerForCard,
-  speakDangerOnce, speakDangerPreview, speakGroupArriveNotice, speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener, startLock,
-  stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick, todayStrTT,
-  toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, toggleSelectAllChatLog, ttTimeToMin,
-  updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb, updateLockCd,
-  updateSoundVol, updateTrains, uploadLogo
+  getFilteredEvents, getIntermediateStations, getNextN, getSelectedAccIds, getTodayTTName, getTodayTTType, goChatLogPage, goHistPage,
+  goLogPage, handleCalImportFile, handleEditTTFile, handleNewTTFile, handleSoundUpload, initTTTableEvents, insertEmoji, isBikeEvent,
+  isCalDeleted, isMgmtUnit, isNotifyEvent, isSameTrain, loadAccounts, loadCalOvr, loadChatLogAll, loadChatMessages,
+  loadHistory, loadLogs, loadMoreChatLog, loadSoundSettings, loadSuspendStatus, loadTTMode, loadTTVersions, loginSuccess,
+  makeStationSelect, needsDropdownFilter, nowStr, nowStr2, onChatLogChkChange, onChatLogDateQuickChange, onChatTargetModeChange, onLogMonthChange,
+  onSReasonChange, onTTChange, onTypeChange, openAccEdit, openAccModal, openCalEdit, openCalImport, openChatTargetModal,
+  openEditModal, openEditTT, openFilePreview, openHistoryEdit, openMobileMenu, openModal, openNewTT, openSoundReplace,
+  openSuspendModal, parseNote, playCS, playCurrentSoundCS, playSoundPreview, populateChatLogStationOptions, populateLogMonthOptions, positionEmojiPicker,
+  refreshSoundCurrent, renderAccounts, renderCalMain, renderCalSpecialList, renderChatLog, renderChatLogLoadMoreBtn, renderChatLogPagination, renderChatMessages,
+  renderEmojiPicker, renderEvents, renderHistory, renderLog, renderLogPagination, renderSoundReplaceList, renderSuspendBtn, renderSuspendOverlay,
+  renderTTBanner, renderTTTable, renderTransitBanner, resetChatLogFilter, resetDevice, resetLogFilter, resetSoundCS, saveAcc,
+  saveAccToDb, saveAllSound, saveCalEdit, saveCalOvrToDb, saveHistoryEdit, saveSuspendStatus, saveTTMode, saveTTToDb,
+  selCalSv, selCalType, selSoundPreset, sendChatMessage, setEventFilter, setSFilter, showAlertCard, showPage,
+  showToast, sortedAccountsList, speakArrivalNotice, speakArrivalNoticeVol, speakBikeArriveNotice, speakBikeNotify, speakBikeTransitNotice, speakChatNotice,
+  speakDangerForCard, speakDangerOnce, speakDangerPreview, speakGroupArriveNotice, speakGroupNotify, speakTTS3x, startCardLoop, startEventsListener,
+  startLock, stopCardLoop, submitEditTT, submitEvent, submitFail, submitNewTT, switchEmojiTab, tick,
+  todayStrTT, toggleAllAcc, toggleAllHist, toggleChatWall, toggleEmojiPicker, toggleLoginEye, togglePwd, toggleSelectAllChatLog,
+  ttTimeToMin, updateAccBatchBar, updateAccInDb, updateBikeCapacity, updateCalStep2, updateEventInDb, updateHistBatchBar, updateHistoryInDb,
+  updateLockCd, updateSoundVol, updateTrains, uploadLogo
 });
 
 
