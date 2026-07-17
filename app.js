@@ -1,5 +1,5 @@
 /* ── Firebase 初始化 ── */
-const BUILD = 8; /* 系統版本：每次推送前遞增 */
+const BUILD = 9; /* 系統版本：每次推送前遞增 */
 document.addEventListener('DOMContentLoaded',()=>{const el=document.getElementById('build-num');if(el)el.textContent=BUILD;});
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -1697,10 +1697,11 @@ function startEventsListener(){
     incoming.forEach(ev=>knownEventIds.add(ev.id));
     events=incoming;
     eventsInitialized=true;
-    /* 載入時：自動結案超過10分鐘的舊事件 */
+    /* 載入時：自動結案超過10分鐘的舊事件（只有迄站帳號負責，防止多分頁重複寫入） */
     const now=new Date();
     incoming.forEach(ev=>{
-      if((ev.arrivalTime||ev.departTime)&&(now-(ev.arrivalTime||ev.departTime))>600000&&!autoCloseF.has(ev.id)){
+      const isMyArri=CU&&CU.role!=='S'&&ev.to===CU.station;
+      if((ev.arrivalTime||ev.departTime)&&(now-(ev.arrivalTime||ev.departTime))>600000&&!autoCloseF.has(ev.id)&&isMyArri){
         autoCloseF.add(ev.id);
         closeAlertCard(ev.id);
         const d=ev.departTime;
@@ -2225,8 +2226,8 @@ function tick(){
         }
       }
     }
-    /* 超時自動結案（發車超過 10 分鐘）：清除所有彈窗 */
-    if(ms<-600000&&!autoCloseF.has(ev.id)){
+    /* 超時自動結案（發車超過 10 分鐘）：只有迄站帳號負責，防止多分頁重複寫入 */
+    if(ms<-600000&&!autoCloseF.has(ev.id)&&isMyArrival){
       autoCloseF.add(ev.id);
       closeAlertCard(ev.id);
       const now2=new Date();
