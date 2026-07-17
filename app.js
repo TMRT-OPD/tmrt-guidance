@@ -1,5 +1,5 @@
 /* ── Firebase 初始化 ── */
-const BUILD = 6; /* 系統版本：每次推送前遞增 */
+const BUILD = 7; /* 系統版本：每次推送前遞增 */
 document.addEventListener('DOMContentLoaded',()=>{const el=document.getElementById('build-num');if(el)el.textContent=BUILD;});
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, arrayUnion, startAfter } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -1868,8 +1868,8 @@ function renderEvents(){
       '<span class="tag '+(TC[ev.type]||'tag-gray')+'">'+ev.type+'</span>'+
       (isTransit?'<span class="tag tag-teal" style="border-style:dashed">途經本站</span>':'')+
       (isBike?'':'<span class="tag tag-gray">車組 '+(ev.trainGroup||'—')+'</span>')+
-      '<span class="tag tag-gray">'+ev.gate+'</span>'+
-      '<span class="tag tag-gray">'+ev.gender+'</span>'+
+      (isBike?'':'<span class="tag tag-gray">'+ev.gate+'</span>')+
+      (ev.gender?'<span class="tag tag-gray">'+ev.gender+'</span>':'')+
     '</div>'+
     (ev.note?'<div class="event-note" style="margin-bottom:4px"><i class="ti ti-note" style="font-size:11px"></i> '+ev.note+'</div>':'')+
     '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
@@ -2093,6 +2093,7 @@ function openEditModal(id){const ev=events.find(e=>e.id===id);if(!ev)return;docu
   const gate=document.getElementById('f-gate');
   if(gate){gate.disabled=ev.type==='自行車旅客';gate.style.opacity=ev.type==='自行車旅客'?'0.35':'1';gate.style.cursor=ev.type==='自行車旅客'?'not-allowed':'';}
   if(ev.type==='自行車旅客'){const b2=document.getElementById('f-bike2');const b9=document.getElementById('f-bike9');if(b2)b2.value=ev.bikeDoor2||0;if(b9)b9.value=ev.bikeDoor9||0;}
+  updateBikeCapacity();
   document.getElementById('modal-form').classList.add('open');}
 function closeFormModal(){
   document.getElementById('modal-form').classList.remove('open');
